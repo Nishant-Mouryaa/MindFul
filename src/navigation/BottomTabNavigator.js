@@ -16,7 +16,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
-import HomeScreen from '../screens/HomeScreen';
+import HomeScreen from '../screens/home/HomeScreen';
 import TextbooksScreen from '../screens/Textbooks/TextbooksScreen';
 import OnlineTestScreen from '../screens/Test/OnlineTestScreen';
 import { Palette } from '../theme/colors';          // <-- already present

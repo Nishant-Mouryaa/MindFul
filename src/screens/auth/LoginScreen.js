@@ -20,11 +20,11 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { db } from '../../config/firebase';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Palette } from '../theme/colors';
+import { Palette } from '../../theme/colors';
 import { ActivityIndicator } from 'react-native-paper';
 
 const { width } = Dimensions.get('window');
@@ -83,14 +83,14 @@ const LoginScreen = () => {
     ]).start();
   };
 
-  const checkAdminStatus = async (userId) => {
+  const checkUserType = async (userId) => {
     try {
       const userRef = doc(db, 'users', userId);
       const docSnap = await getDoc(userRef);
-      return docSnap.exists() && docSnap.data().isAdmin;
+      return docSnap.exists() ? docSnap.data().userType : 'athlete';
     } catch (err) {
-      console.error("Error checking admin status:", err);
-      return false;
+      console.error("Error checking user type:", err);
+      return 'athlete';
     }
   };
 
@@ -118,14 +118,14 @@ const LoginScreen = () => {
         return;
       }
       
-      const isAdmin = await checkAdminStatus(user.uid);
+      const userType = await checkUserType(user.uid);
       
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       
-      if (isAdmin) {
-        navigation.navigate('Admin', { screen: 'AdminPanel' });
+      if (userType === 'coach') {
+        navigation.navigate('CoachDashboard');
       } else {
-        navigation.navigate('Main');
+        navigation.navigate('AthleteDashboard');
       }
     } catch (err) {
       let errorMessage = 'Login failed. Please try again.';
@@ -157,7 +157,7 @@ const LoginScreen = () => {
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <LinearGradient
-        colors={[colors.background, colors.primaryXXLight]}
+        colors={['#0a0a0a', '#1a1a1a']} // Dark theme for powerlifting app
         style={styles.container}
       >
         <KeyboardAvoidingView
@@ -181,13 +181,13 @@ const LoginScreen = () => {
               <View style={styles.header}>
                 <View style={styles.logoContainer}>
                   <MaterialCommunityIcons 
-                    name="book-education" 
+                    name="weight-lifter" 
                     size={48} 
-                    color={colors.primary} 
+                    color="#e63946" // Powerlifting red accent
                   />
                 </View>
-                <Title style={styles.title}>Welcome Back</Title>
-                <Text style={styles.subtitle}>Sign in to continue your learning journey</Text>
+                <Title style={styles.title}>POWERLIFT PRO</Title>
+                <Text style={styles.subtitle}>Log in to track your lifts and progress</Text>
               </View>
 
               <View style={styles.formContainer}>
@@ -199,13 +199,13 @@ const LoginScreen = () => {
                   autoCapitalize="none"
                   keyboardType="email-address"
                   style={styles.input}
-                  left={<TextInput.Icon name="email-outline" color={colors.primary} />}
+                  left={<TextInput.Icon name="email-outline" color="#e63946" />}
                   theme={{
                     colors: {
-                      primary: colors.primary,
-                      background: colors.surface,
-                      placeholder: colors.textMuted,
-                      text: colors.text,
+                      primary: '#e63946',
+                      background: '#2b2b2b',
+                      placeholder: '#777',
+                      text: '#fff',
                       surface: 'transparent'
                     },
                     roundness: 10
@@ -221,11 +221,11 @@ const LoginScreen = () => {
                   onChangeText={setPassword}
                   secureTextEntry={secureTextEntry}
                   style={styles.input}
-                  left={<TextInput.Icon name="lock-outline" color={colors.primary} />}
+                  left={<TextInput.Icon name="lock-outline" color="#e63946" />}
                   right={
                     <TextInput.Icon 
                       name={secureTextEntry ? "eye-off" : "eye"} 
-                      color={colors.primary}
+                      color="#e63946"
                       onPress={() => {
                         setSecureTextEntry(!secureTextEntry);
                         Haptics.selectionAsync();
@@ -234,10 +234,10 @@ const LoginScreen = () => {
                   }
                   theme={{
                     colors: {
-                      primary: colors.primary,
-                      background: colors.surface,
-                      placeholder: colors.textMuted,
-                      text: colors.text,
+                      primary: '#e63946',
+                      background: '#2b2b2b',
+                      placeholder: '#777',
+                      text: '#fff',
                       surface: 'transparent'
                     },
                     roundness: 10
@@ -253,37 +253,36 @@ const LoginScreen = () => {
                   </HelperText>
                 ) : null}
 
-            
-<TouchableWithoutFeedback
-  onPressIn={handlePressIn}
-  onPressOut={handlePressOut}
-  onPress={handleSignIn}
-  disabled={loading}
->
-  <Animated.View style={[
-    styles.buttonContainer,
-    { 
-      transform: [{ scale: buttonScale }],
-      backgroundColor: loading ? colors.primaryLight : colors.primary,
-    }
-  ]}>
-    <View style={styles.buttonContent}>
-      {loading && (
-        <ActivityIndicator 
-          color={colors.iconlight} 
-          size="small" 
-          style={styles.loadingIndicator}
-        />
-      )}
-      <Text style={styles.buttonText}>
-        {loading ? 'Signing In' : 'Sign In'}
-      </Text>
-    </View>
-  </Animated.View>
-</TouchableWithoutFeedback>
+                <TouchableWithoutFeedback
+                  onPressIn={handlePressIn}
+                  onPressOut={handlePressOut}
+                  onPress={handleSignIn}
+                  disabled={loading}
+                >
+                  <Animated.View style={[
+                    styles.buttonContainer,
+                    { 
+                      transform: [{ scale: buttonScale }],
+                      backgroundColor: loading ? '#c1121f' : '#e63946',
+                    }
+                  ]}>
+                    <View style={styles.buttonContent}>
+                      {loading && (
+                        <ActivityIndicator 
+                          color="#ffffff" 
+                          size="small" 
+                          style={styles.loadingIndicator}
+                        />
+                      )}
+                      <Text style={styles.buttonText}>
+                        {loading ? 'SIGNING IN' : 'SIGN IN'}
+                      </Text>
+                    </View>
+                  </Animated.View>
+                </TouchableWithoutFeedback>
 
                 <View style={styles.footer}>
-                  <Text style={styles.footerText}>Don't have an account?</Text>
+                  <Text style={styles.footerText}>New to Powerlift Pro?</Text>
                   <Button 
                     mode="text" 
                     onPress={() => {
@@ -293,7 +292,7 @@ const LoginScreen = () => {
                     labelStyle={styles.signupLink}
                     compact
                   >
-                    Sign Up
+                    CREATE ACCOUNT
                   </Button>
                 </View>
               </View>
@@ -308,7 +307,7 @@ const LoginScreen = () => {
 const makeStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#0a0a0a',
   },
   content: {
     flex: 1,
@@ -326,8 +325,8 @@ const makeStyles = (colors) => StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
-    backgroundColor: colors.surface,
-    shadowColor: colors.primaryXLight,
+    backgroundColor: '#1a1a1a',
+    shadowColor: '#e63946',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
@@ -335,25 +334,26 @@ const makeStyles = (colors) => StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: '600',
-    color: colors.onBackground,
+    fontWeight: '800',
+    color: '#fff',
     marginBottom: 8,
     textAlign: 'center',
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontFamily: 'Roboto-Bold',
+    letterSpacing: 1.5,
   },
   subtitle: {
     fontSize: 16,
-    color: colors.textMuted,
+    color: '#aaa',
     textAlign: 'center',
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontFamily: 'Roboto-Regular',
     lineHeight: 24,
   },
   formContainer: {
     marginTop: 20,
-    backgroundColor: colors.surface,
+    backgroundColor: '#1a1a1a',
     borderRadius: 20,
     padding: 24,
-    shadowColor: colors.primaryXLight,
+    shadowColor: '#e63946',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 10,
@@ -361,20 +361,20 @@ const makeStyles = (colors) => StyleSheet.create({
   },
   input: {
     marginBottom: 20,
-    backgroundColor: colors.surface,
+    backgroundColor: '#2b2b2b',
     fontSize: 16,
     height: 60,
   },
-buttonContainer: {
+  buttonContainer: {
     borderRadius: 12,
     paddingVertical: 16,
     marginTop: 24,
-    shadowColor: colors.primaryXLight,
+    shadowColor: '#e63946',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 8,
     elevation: 6,
-    backgroundColor: colors.primary,
+    backgroundColor: '#e63946',
   },
   buttonContent: {
     flexDirection: 'row',
@@ -385,10 +385,10 @@ buttonContainer: {
     marginRight: 8,
   },
   buttonText: {
-    color: colors.iconlight,
+    color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: 0.5,
+    fontWeight: '800',
+    letterSpacing: 1,
     textTransform: 'uppercase',
   },
   footer: {
@@ -398,22 +398,22 @@ buttonContainer: {
     marginTop: 24,
   },
   footerText: {
-    color: colors.textMuted,
+    color: '#777',
     marginRight: 4,
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontFamily: 'Roboto-Regular',
   },
   signupLink: {
-    color: colors.primary,
-    fontWeight: '600',
-    textDecorationLine: 'underline',
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    color: '#e63946',
+    fontWeight: '800',
+    fontFamily: 'Roboto-Bold',
+    letterSpacing: 0.5,
   },
   errorText: {
     fontSize: 14,
     marginBottom: 8,
-    color: colors.error,
+    color: '#ff6b6b',
     textAlign: 'center',
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontFamily: 'Roboto-Medium',
   },
 });
 

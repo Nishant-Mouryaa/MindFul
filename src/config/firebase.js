@@ -5,12 +5,13 @@ import { getStorage } from 'firebase/storage';
 
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBACL6T_ZD0bcThgCJ9UNBG1jSEgBJYOko",
-  authDomain: "iyers-78791.firebaseapp.com",
-  projectId: "iyers-78791",
-  storageBucket: "iyers-78791.appspot.com", // Use this format instead of gs://
-  messagingSenderId: "949976205738",
-  appId: "1:949976205738:web:5652fa2e621d2150e1c3d3"
+  apiKey: "AIzaSyDGMWa7KmwHvuAtYkvlJvtBQ_jY6vuqN4U",
+  authDomain: "test-1ef59.firebaseapp.com",
+  projectId: "test-1ef59",
+  storageBucket: "test-1ef59.firebasestorage.app",
+  messagingSenderId: "381657429111",
+  appId: "1:381657429111:web:28039ba0cbe9b2cc208272",
+  measurementId: "G-938WWBHK3B"
 };
 
 // firebase config using env

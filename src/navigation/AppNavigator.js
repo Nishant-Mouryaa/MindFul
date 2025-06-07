@@ -1,31 +1,21 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-import WelcomeScreen from '../screens/WelcomeScreen';
-import LoginScreen from '../screens/LoginScreen';
-import SignupScreen from '../screens/SignupScreen';
-import BottomTabNavigator from './BottomTabNavigator';
-import AdminStack from './AdminStack'; // Import the new AdminStack
-import PdfViewerScreen from '../screens/PdfViewerScreen';
-
-import BoardSelectionScreen from '../screens/Test/BoardSelectionScreen';
-import StandardSelectionScreen from '../screens/Test/StandardSelectionScreen';
-import SubjectSelectionScreen from '../screens/Test/SubjectSelectionScreen';
-import ChapterSelectionScreen from '../screens/Test/ChapterSelectionScreen';
-import TestListScreen from '../screens/Test/TestListScreen';
-import TestScreen from '../screens/Test/TestScreen';
-import AboutUsScreen from '../screens/AboutUsScreen';
-import SettingsScreen from '../screens/SettingsScreen';
-import ProfileScreen from '../screens/ProfileScreen';
-
-
-
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import { doc, onSnapshot } from 'firebase/firestore';  // Use onSnapshot
+import { db } from '../config/firebase';
 import { useEffect, useState } from 'react';
 
+// Import all your screens
+import LoginScreen from '../screens/auth/LoginScreen';
+import SignupScreen from '../screens/auth/SignupScreen';
+import OnboardingScreen from '../screens/onboarding/OnboardingScreen';
+import BottomTabNavigator from './BottomTabNavigator';
+import HomeScreen from '../screens/home/HomeScreen';
 
 const AuthStack = createStackNavigator();
 const AppStack = createStackNavigator();
+const OnboardingStack = createStackNavigator();
 
 const AuthNavigator = () => (
   <AuthStack.Navigator screenOptions={{ headerShown: false }}>
@@ -34,57 +24,102 @@ const AuthNavigator = () => (
   </AuthStack.Navigator>
 );
 
+const OnboardingNavigator = () => (
+  <OnboardingStack.Navigator screenOptions={{ headerShown: false }}>
+    <OnboardingStack.Screen name="Onboarding" component={OnboardingScreen} />
+  </OnboardingStack.Navigator>
+);
+
 const MainNavigator = () => (
   <AppStack.Navigator screenOptions={{ headerShown: false }}>
     <AppStack.Screen name="Main" component={BottomTabNavigator} />
-    <AppStack.Screen name="BoardSelection" component={BoardSelectionScreen} />
-    <AppStack.Screen name="StandardSelection" component={StandardSelectionScreen} />
-    <AppStack.Screen name="SubjectSelection" component={SubjectSelectionScreen} />
-    <AppStack.Screen name="ChapterSelection" component={ChapterSelectionScreen} />
-    <AppStack.Screen name="TestList" component={TestListScreen} />
-    <AppStack.Screen name="TestScreen" component={TestScreen} />
-    <AppStack.Screen name="AboutUs" component={AboutUsScreen} />
-    <AppStack.Screen name="Settings" component={SettingsScreen} />
-    <AppStack.Screen name="Profile" component={ProfileScreen} />
-    
-    
-
-    <AppStack.Screen name="Admin" component={AdminStack} />
-
-    <AppStack.Screen 
-      name="PdfViewer" 
-      component={PdfViewerScreen}
-      options={({ route }) => ({ title: route.params?.title || 'PDF' })}
-    />
+    <AppStack.Screen name="Home" component={HomeScreen} />
+    {/* ... other screens */}
   </AppStack.Navigator>
-
-  
 );
 
-const AppNavigator = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+export default function AppNavigator() {
+  const [authState, setAuthState] = useState({
+    isAuthenticated: false,
+    needsOnboarding: true,
+    isLoading: true
+  });
+
   const auth = getAuth();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setIsAuthenticated(!!user);
-      setIsLoading(false);
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // Once we have a user, listen to that user's document in real-time
+        const docRef = doc(db, 'users', user.uid);
+        const unsubscribeDoc = onSnapshot(
+          docRef,
+          (snapshot) => {
+            if (!snapshot.exists()) {
+              // If no doc yet, assume we need onboarding
+              setAuthState({
+                isAuthenticated: true,
+                needsOnboarding: true,
+                isLoading: false
+              });
+            } else {
+              // If doc exists, see if user has onboardingComplete
+              const data = snapshot.data();
+              const isDone = data.onboardingComplete === true;
+              setAuthState({
+                isAuthenticated: true,
+                needsOnboarding: !isDone, // false if done
+                isLoading: false
+              });
+            }
+          },
+          (error) => {
+            console.error('onSnapshot error:', error);
+            // If there's an error, assume we still need onboarding for safety
+            setAuthState({
+              isAuthenticated: true,
+              needsOnboarding: true,
+              isLoading: false
+            });
+          }
+        );
+
+        // Return unsubscribe function for the doc listener
+        return () => {
+          unsubscribeDoc();
+        };
+      } else {
+        // If user is not logged in, no doc to listen to
+        setAuthState({
+          isAuthenticated: false,
+          needsOnboarding: true,
+          isLoading: false
+        });
+      }
     });
 
-    return unsubscribe; // Clean up on unmount
-  }, []);
+    // Cleanup the auth subscription
+    return unsubscribeAuth;
+  }, [auth]);
 
-  if (isLoading) {
-    // Return a loading screen here if needed
+  if (authState.isLoading) {
+    // Return a loading screen or null
     return null;
   }
 
+  // Decide which navigator to show
   return (
     <NavigationContainer>
-      {isAuthenticated ? <MainNavigator /> : <AuthNavigator />}
+      {!authState.isAuthenticated ? (
+        // User not authenticated -> show Auth flow
+        <AuthNavigator />
+      ) : authState.needsOnboarding ? (
+        // User is authenticated but not onboarded -> show Onboarding
+        <OnboardingNavigator />
+      ) : (
+        // User is authenticated and done onboarding -> show main
+        <MainNavigator />
+      )}
     </NavigationContainer>
   );
-};
-
-export default AppNavigator;
+}
