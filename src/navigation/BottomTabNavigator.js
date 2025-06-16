@@ -17,8 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import HomeScreen from '../screens/home/HomeScreen';
-import TextbooksScreen from '../screens/Textbooks/TextbooksScreen';
-import OnlineTestScreen from '../screens/Test/OnlineTestScreen';
+
 import { Palette } from '../theme/colors';          // <-- already present
 
 const { width } = Dimensions.get('window');
@@ -200,8 +199,8 @@ const BottomTabNavigator = () => {
         })}
       >
         <Tab.Screen name="Home"      component={HomeScreen}      options={{ tabBarLabel: 'Home' }} />
-        <Tab.Screen name="Textbooks" component={TextbooksScreen} options={{ tabBarLabel: 'Textbooks' }} />
-        <Tab.Screen name="Tests"     component={OnlineTestScreen} options={{ tabBarLabel: 'Tests' }} />
+        {/* <Tab.Screen name="Textbooks" component={TextbooksScreen} options={{ tabBarLabel: 'Textbooks' }} />
+        <Tab.Screen name="Tests"     component={OnlineTestScreen} options={{ tabBarLabel: 'Tests' }} /> */}
         {/* If you want an Admin tab, add it conditionally but still coloured with Palette */}
         {/* {isAdmin && <Tab.Screen name="Admin" component={AdminPanel} />} */}
       </Tab.Navigator>
