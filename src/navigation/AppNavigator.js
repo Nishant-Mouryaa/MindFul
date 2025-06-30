@@ -21,6 +21,8 @@ import CBTScreen from '../screens/mental-health/CBTScreen';
 import GroundingScreen from '../screens/mental-health/GroundingScreen';
 import JournalScreen from '../screens/mental-health/JournalScreen';
 import EmergencyResourcesScreen from '../screens/mental-health/EmergencyResourcesScreen';
+import SavedRecordsScreen from '../screens/mental-health/SavedRecordsScreen';
+import RecordDetailScreen from '../screens/mental-health/RecordDetailScreen';
 
 const AuthStack = createStackNavigator();
 const AppStack = createStackNavigator();
@@ -46,7 +48,8 @@ const MainNavigator = () => (
     <AppStack.Screen name="Grounding" component={GroundingScreen} />
     <AppStack.Screen name="Journal" component={JournalScreen} />
     <AppStack.Screen name="EmergencyResources" component={EmergencyResourcesScreen} />
-    {/* ... other screens */}
+    <AppStack.Screen name="SavedRecordsScreen" component={SavedRecordsScreen} />
+    <AppStack.Screen name="RecordDetailScreen" component={RecordDetailScreen} />
   </AppStack.Navigator>
 );
 
