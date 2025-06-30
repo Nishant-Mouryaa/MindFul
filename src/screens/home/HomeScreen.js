@@ -8,11 +8,11 @@ import {
   TouchableOpacity,
   Platform,
   Dimensions,
-  ImageBackground,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Palette } from '../../theme/colors';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -20,19 +20,28 @@ export default function HomeScreen() {
   const navigation = useNavigation();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const [selectedPR, setSelectedPR] = useState(null);
-  
-  const scaleValues = useRef([
-    new Animated.Value(1),
-    new Animated.Value(1),
-    new Animated.Value(1),
-    new Animated.Value(1),
-    new Animated.Value(1)
-  ]).current;
+  const [currentMood, setCurrentMood] = useState(null);
+  const [streakCount] = useState(5); // Example streak
+
+  // Mood options with icons
+  const moodOptions = [
+    { name: 'Happy', icon: 'emoticon-happy-outline', color: '#F8BBD0', value: 10 },
+    { name: 'Calm', icon: 'yin-yang', color: '#D1C4E9', value: 7 },
+    { name: 'Relax', icon: 'meditation', color: '#FFE0B2', value: 5 },
+    { name: 'Focused', icon: 'brain', color: '#B2DFDB', value: 8 },
+    { name: 'Tired', icon: 'sleep', color: '#CFD8DC', value: 2 },
+  ];
+
+  // Sample mood history data for the preview chart
+  const moodHistoryData = {
+    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    datasets: [{
+      data: [5, 7, 4, 8, 6, 9, 7],
+      color: () => '#4DB6AC',
+    }]
+  };
 
   React.useEffect(() => {
-    // Initial animations
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -45,88 +54,50 @@ export default function HomeScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-
-    // Pulse animation for start button
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.05,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
   }, []);
-
-  const handlePressIn = (index) => {
-    Animated.spring(scaleValues[index], {
-      toValue: 0.95,
-      friction: 3,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const handlePressOut = (index) => {
-    Animated.spring(scaleValues[index], {
-      toValue: 1,
-      friction: 4,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const prData = [
-    { title: 'Squat', value: '250 lbs', increase: '+10 lbs', icon: 'weight-lifter' },
-    { title: 'Bench Press', value: '180 lbs', increase: '+5 lbs', icon: 'arm-flex' },
-    { title: 'Deadlift', value: '300 lbs', increase: '+15 lbs', icon: 'weight' },
-  ];
 
   const QuickStat = ({ icon, value, label }) => (
     <View style={styles.quickStat}>
-      <MaterialCommunityIcons name={icon} size={24} color="#000" />
+      <MaterialCommunityIcons name={icon} size={24} color="#009688" />
       <Text style={styles.quickStatValue}>{value}</Text>
       <Text style={styles.quickStatLabel}>{label}</Text>
     </View>
   );
 
-  const PRCard = ({ title, value, increase, icon, index }) => (
-    <Animated.View
+  const MoodCard = ({ item, selected, onSelect }) => (
+    <TouchableOpacity
       style={[
-        styles.prCard,
-        { transform: [{ scale: scaleValues[index] }] },
-        selectedPR === index && styles.selectedPRCard
+        styles.moodCard,
+        { backgroundColor: item.color },
+        selected && styles.selectedMood,
       ]}
+      onPress={onSelect}
+      activeOpacity={0.8}
     >
-      <TouchableOpacity
-        style={styles.prCardContent}
-        onPress={() => setSelectedPR(index)}
-        onPressIn={() => handlePressIn(index)}
-        onPressOut={() => handlePressOut(index)}
-        activeOpacity={0.8}
-      >
-        <LinearGradient
-          colors={['rgba(230, 57, 70, 0.1)', 'rgba(230, 57, 70, 0)']}
-          style={styles.prGradient}
-        />
-        <View style={styles.prHeader}>
-          <View style={styles.prIconContainer}>
-            <MaterialCommunityIcons name={icon} size={24} color="#e63946" />
-          </View>
-          <View style={styles.prBadge}>
-            <Text style={styles.prBadgeText}>{increase}</Text>
-          </View>
+      <MaterialCommunityIcons 
+        name={item.icon} 
+        size={30} 
+        color="#fff" 
+      />
+      <Text style={styles.moodName}>{item.name}</Text>
+    </TouchableOpacity>
+  );
+
+  // Simplified MiniLineChart component
+  const MiniLineChart = ({ data }) => (
+    <View style={styles.chartContainer}>
+      {data.datasets[0].data.map((value, index) => (
+        <View key={index} style={[
+          styles.chartBar, 
+          { 
+            height: value * 8,
+            backgroundColor: data.datasets[0].color(),
+          }
+        ]}>
+          <Text style={styles.chartLabel}>{data.labels[index]}</Text>
         </View>
-        <Text style={styles.prTitle}>{title}</Text>
-        <Text style={styles.prValue}>{value}</Text>
-        <View style={styles.prProgress}>
-          <View style={[styles.prProgressBar, { width: `${(index + 1) * 30}%` }]} />
-        </View>
-      </TouchableOpacity>
-    </Animated.View>
+      ))}
+    </View>
   );
 
   return (
@@ -139,105 +110,98 @@ export default function HomeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>Welcome back!</Text>
-            <Text style={styles.headerTitle}>LIFTWISE</Text>
+            <Text style={styles.greeting}>How are you feeling today?</Text>
+            <Text style={styles.headerTitle}>MINDFUL</Text>
           </View>
-          <TouchableOpacity style={styles.profileButton}>
-            <MaterialCommunityIcons name="account-circle" size={32} color="#e63946" />
+          <TouchableOpacity 
+            style={styles.profileButton}
+            onPress={() => navigation.navigate('Profile')}
+          >
+            <MaterialCommunityIcons name="account-circle" size={36} color="#616161" />
           </TouchableOpacity>
         </View>
 
-        {/* Hero Section */}
+        {/* Mood Tracking Section */}
         <LinearGradient
-          colors={['#e63946', '#d62828']}
-          style={styles.heroSection}
+          colors={['#F1F9F6', '#D0ECEA']}
+          style={styles.moodSection}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         >
-          <View style={styles.heroContent}>
-            <View>
-              <Text style={styles.heroTitle}>Ready to Crush It?</Text>
-              <Text style={styles.heroSubtitle}>Squat & Bench Press Day</Text>
-            </View>
-            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-              <TouchableOpacity
-                style={styles.startButton}
-                onPress={() => navigation.navigate('Workout')}
-              >
-                <MaterialCommunityIcons name="play" size={24} color="#e63946" />
-              </TouchableOpacity>
-            </Animated.View>
-          </View>
-          <View style={styles.heroStats}>
-            <QuickStat icon="fire" value="5" label="Streak"  />
-            <QuickStat icon="calendar-check" value="23" label="This Month" />
-            <QuickStat icon="trophy" value="12" label="PRs" />
-          </View>
-        </LinearGradient>
-
-        {/* Recent PRs Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Personal Records</Text>
-            <TouchableOpacity>
-              <Text style={styles.seeAllText}>See All</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView 
-            horizontal 
+          <Text style={styles.sectionTitle}>Track Your Mood</Text>
+          
+          <ScrollView
+            horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.prScrollContainer}
+            contentContainerStyle={styles.moodScrollContainer}
           >
-            {prData.map((pr, index) => (
-              <PRCard key={index} {...pr} index={index + 1} />
+            {moodOptions.map((moodItem) => (
+              <MoodCard
+                key={moodItem.value}
+                item={moodItem}
+                selected={currentMood === moodItem.value}
+                onSelect={() => setCurrentMood(moodItem.value)}
+              />
             ))}
           </ScrollView>
-        </View>
 
-        {/* Tip of the Day */}
-        <LinearGradient
-          colors={['rgba(230, 57, 70, 0.1)', 'rgba(230, 57, 70, 0.05)']}
-          style={styles.tipContainer}
-        >
-          <View style={styles.tipHeader}>
-            <MaterialCommunityIcons name="lightbulb-on" size={28} color="#e63946" />
-            <Text style={styles.tipTitle}>Pro Tip</Text>
-          </View>
-          <Text style={styles.tipText}>
-            Progressive overload is key. Add 2.5-5 lbs each week to maintain steady progress.
-          </Text>
+          {currentMood && (
+            <TouchableOpacity 
+              style={styles.journalButton}
+              onPress={() => navigation.navigate('Journal', { mood: currentMood })}
+            >
+              <LinearGradient 
+                colors={['#80CBC4', '#4DB6AC']} 
+                style={styles.journalGradient}
+              >
+                <Text style={styles.journalButtonText}>
+                  {currentMood <= 3 ? "Journal About Today" : "Capture This Moment"}
+                </Text>
+                <MaterialCommunityIcons name="book-edit" size={20} color="#fff" />
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
         </LinearGradient>
 
-        {/* Quick Actions */}
-        <View style={styles.quickActions}>
-          <TouchableOpacity 
-            style={styles.actionCard}
-            onPress={() => navigation.navigate('Academy')}
-          >
-            <LinearGradient
-              colors={['#1a1a1a', '#222']}
-              style={styles.actionGradient}
-            >
-              <MaterialCommunityIcons name="school" size={28} color="#e63946" />
-              <Text style={styles.actionTitle}>Learn</Text>
-              <Text style={styles.actionSubtitle}>Master the basics</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.actionCard}
-            onPress={() => navigation.navigate('Progress')}
-          >
-            <LinearGradient
-              colors={['#1a1a1a', '#222']}
-              style={styles.actionGradient}
-            >
-              <MaterialCommunityIcons name="chart-line" size={28} color="#e63946" />
-              <Text style={styles.actionTitle}>Progress</Text>
-              <Text style={styles.actionSubtitle}>Track your gains</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+        {/* Quick Stats */}
+        <View style={styles.quickStatsContainer}>
+          <QuickStat icon="fire" value={streakCount} label="Day Streak" />
+          <QuickStat icon="calendar-check" value="85%" label="This Month" />
+          <QuickStat icon="emoticon-happy-outline" value="6.5" label="Avg Mood" />
         </View>
+
+        {/* Progress Preview */}
+        <TouchableOpacity 
+          style={styles.progressPreview}
+          onPress={() => navigation.navigate('Progress')}
+        >
+          <Text style={styles.sectionTitleAlt}>Your Mood Trends</Text>
+          <MiniLineChart data={moodHistoryData} />
+          <Text style={styles.seeMoreText}>See full analysis →</Text>
+        </TouchableOpacity>
+
+        {/* Daily Mental Health Tip */}
+        <View style={styles.tipCard}>
+          <View style={styles.tipHeader}>
+            <MaterialCommunityIcons name="lightbulb-on" size={24} color="#00897B" />
+            <Text style={styles.tipTitle}>Today's Wellness Tip</Text>
+          </View>
+          <Text style={styles.tipContent}>
+            "Practice the 5-4-3-2-1 grounding technique when feeling anxious: 
+            Name 5 things you see, 4 things you feel, 3 things you hear, 
+            2 things you smell, and 1 thing you taste."
+          </Text>
+        </View>
+
+        {/* Emergency Resources */}
+        <TouchableOpacity
+          style={styles.emergencyCard}
+          onPress={() => navigation.navigate('EmergencyResources')}
+        >
+          <MaterialCommunityIcons name="lifebuoy" size={24} color="#fff" />
+          <Text style={styles.emergencyText}>Need Immediate Help?</Text>
+          <MaterialCommunityIcons name="chevron-right" size={24} color="#fff" />
+        </TouchableOpacity>
       </Animated.View>
     </ScrollView>
   );
@@ -246,7 +210,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0a',
+    backgroundColor: '#fdfdfd',
   },
   scrollContent: {
     flexGrow: 1,
@@ -261,176 +225,140 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   greeting: {
-    fontSize: 14,
-    color: '#888',
+    fontSize: 16,
+    color: '#616161',
     fontWeight: '400',
+    marginBottom: 2,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: '800',
-    color: '#e63946',
-    letterSpacing: 2,
-    fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif-medium',
+    color: '#00897B',
+    letterSpacing: 1,
   },
-  profileButton: {
-    padding: 4,
-  },
-  heroSection: {
+  moodSection: {
     marginHorizontal: 20,
     borderRadius: 20,
     padding: 24,
-    marginBottom: 24,
-    elevation: 8,
-    shadowColor: '#e63946',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    marginBottom: 16,
+    elevation: 3,
   },
-  heroContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  heroTitle: {
-    fontSize: 24,
+  sectionTitle: {
+    fontSize: 18,
     fontWeight: '700',
-    color: '#fff',
-    marginBottom: 4,
+    color: '#424242',
+    marginBottom: 16,
   },
-  heroSubtitle: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.8)',
+  moodScrollContainer: {
+    paddingRight: 16,
   },
-  startButton: {
-    backgroundColor: '#fff',
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  moodCard: {
+    width: 70,
+    height: 70,
+    borderRadius: 16,
+    marginRight: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    elevation: 3,
   },
-  heroStats: {
+  selectedMood: {
+    transform: [{ scale: 1.1 }],
+    shadowColor: '#424242',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+  },
+  moodName: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  journalButton: {
+    marginTop: 16,
+  },
+  journalGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 12,
+  },
+  journalButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    marginRight: 10,
+  },
+  quickStatsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
+    marginHorizontal: 20,
+    marginBottom: 24,
   },
   quickStat: {
     alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 12,
+    borderRadius: 12,
+    width: '30%',
+    elevation: 2,
   },
   quickStatValue: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#fff',
+    color: '#009688',
     marginTop: 4,
   },
   quickStatLabel: {
     fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: '#616161',
   },
-  section: {
-    marginBottom: 24,
+  progressPreview: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    elevation: 2,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
+  sectionTitleAlt: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#00897B',
     marginBottom: 16,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  seeAllText: {
-    fontSize: 14,
-    color: '#e63946',
-    fontWeight: '600',
-  },
-  prScrollContainer: {
-    paddingHorizontal: 20,
-  },
-  prCard: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 16,
-    marginRight: 12,
-    width: screenWidth * 0.4,
-    borderWidth: 1,
-    borderColor: '#222',
-    overflow: 'hidden',
-  },
-  selectedPRCard: {
-    borderColor: '#e63946',
-  },
-  prCardContent: {
-    padding: 16,
-  },
-  prGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  prHeader: {
+  chartContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    height: 100,
+    marginVertical: 10,
+  },
+  chartBar: {
+    width: 30,
+    borderTopLeftRadius: 6,
+    borderTopRightRadius: 6,
+    justifyContent: 'flex-end',
     alignItems: 'center',
-    marginBottom: 12,
   },
-  prIconContainer: {
-    backgroundColor: 'rgba(230, 57, 70, 0.1)',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  prBadge: {
-    backgroundColor: '#2a9d8f',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  prBadgeText: {
-    fontSize: 11,
+  chartLabel: {
+    fontSize: 10,
     color: '#fff',
-    fontWeight: '600',
-  },
-  prTitle: {
-    fontSize: 14,
-    color: '#888',
     marginBottom: 4,
   },
-  prValue: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#fff',
-    marginBottom: 8,
+  seeMoreText: {
+    color: '#00897B',
+    alignSelf: 'flex-end',
+    marginTop: 8,
+    fontWeight: '600',
   },
-  prProgress: {
-    height: 4,
-    backgroundColor: '#222',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  prProgressBar: {
-    height: '100%',
-    backgroundColor: '#e63946',
-    borderRadius: 2,
-  },
-  tipContainer: {
-    marginHorizontal: 20,
+  tipCard: {
+    backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(230, 57, 70, 0.2)',
+    padding: 16,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    elevation: 2,
   },
   tipHeader: {
     flexDirection: 'row',
@@ -438,39 +366,29 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   tipTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#e63946',
-    marginLeft: 8,
-  },
-  tipText: {
-    fontSize: 15,
-    color: '#ccc',
-    lineHeight: 22,
-  },
-  quickActions: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    gap: 12,
-  },
-  actionCard: {
-    flex: 1,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  actionGradient: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  actionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#fff',
-    marginTop: 8,
+    color: '#00897B',
+    marginLeft: 8,
   },
-  actionSubtitle: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 4,
+  tipContent: {
+    fontSize: 14,
+    color: '#616161',
+    lineHeight: 22,
+  },
+  emergencyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F45957',
+    padding: 16,
+    borderRadius: 12,
+    marginHorizontal: 20,
+    elevation: 2,
+  },
+  emergencyText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 16,
   },
 });

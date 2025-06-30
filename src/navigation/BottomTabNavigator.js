@@ -1,4 +1,3 @@
-// BottomTabNavigator.tsx
 import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
@@ -7,6 +6,7 @@ import {
   Animated,
   TouchableWithoutFeedback,
   Dimensions,
+  focused
 } from 'react-native';
 import { getAuth } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
@@ -17,8 +17,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import HomeScreen from '../screens/home/HomeScreen';
+import JournalScreen from '../screens/mental-health/JournalScreen';
+import ToolsScreen from '../screens/mental-health/ToolsScreen';
+import ProgressScreen from '../screens/mental-health/ProgressScreen';
 
-import { Palette } from '../theme/colors';          // <-- already present
+import { Palette } from '../theme/colors';
 
 const { width } = Dimensions.get('window');
 const Tab = createBottomTabNavigator();
@@ -42,8 +45,9 @@ const TabBarIcon = ({ route, focused, color, size }) => {
 
   const iconName = {
     Home:       focused ? 'home'            : 'home-outline',
-    Textbooks:  focused ? 'book-open'       : 'book-open-outline',
-    Tests:      focused ? 'clipboard-text'  : 'clipboard-text-outline',
+    Journal:    focused ? 'book-open'       : 'book-open-outline',
+    Tools:      focused ? 'tools'           : 'tools',
+    Progress:   focused ? 'chart-line'      : 'chart-line',
   }[route.name];
 
   return (
@@ -54,7 +58,104 @@ const TabBarIcon = ({ route, focused, color, size }) => {
 };
 
 /* ------------------------------------------------------------------ */
-/* Floating “About” FAB                                               */
+/* Enhanced Emergency FAB                                              */
+/* ------------------------------------------------------------------ */
+const EmergencyFAB = () => {
+  const navigation = useNavigation();
+  const scaleAnim = React.useRef(new Animated.Value(1)).current;
+  const pulseAnim = React.useRef(new Animated.Value(1)).current;
+  const pulseOuter = React.useRef(new Animated.Value(1)).current;
+
+  React.useEffect(() => {
+    // Continuous pulse animation
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulse.start();
+
+    // Outer pulse animation
+    const outerPulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseOuter, {
+          toValue: 1.3,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseOuter, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    outerPulse.start();
+
+    return () => {
+      pulse.stop();
+      outerPulse.stop();
+    };
+  }, []);
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, { toValue: 0.9, useNativeDriver: true }).start();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, { toValue: 1, friction: 3, tension: 40, useNativeDriver: true }).start();
+  };
+
+  return (
+    <TouchableWithoutFeedback
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        navigation.navigate('EmergencyResources');
+      }}
+    >
+      <View style={styles.fabContainer}>
+        {/* Outer pulse ring */}
+        <Animated.View
+          style={[
+            styles.pulseRing,
+            { transform: [{ scale: pulseOuter }] },
+          ]}
+        />
+        {/* Inner pulse ring */}
+        <Animated.View
+          style={[
+            styles.pulseRing,
+            { transform: [{ scale: pulseAnim }] },
+          ]}
+        />
+        {/* Main button */}
+        <Animated.View
+          style={[
+            styles.emergencyFab,
+            { transform: [{ scale: scaleAnim }] },
+          ]}
+        >
+          <MaterialCommunityIcons name="lifebuoy" color="#fff" size={28} />
+        </Animated.View>
+      </View>
+    </TouchableWithoutFeedback>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/* Floating "Emergency" FAB                                           */
 /* ------------------------------------------------------------------ */
 const QuickAboutFAB = () => {
   const navigation = useNavigation();
@@ -153,9 +254,8 @@ const BottomTabNavigator = () => {
 
   return (
     <>
-      {/* Optional extra FABs */}
-      
-      
+      {/* Enhanced Emergency FAB */}
+      <EmergencyFAB />
 
       <Tab.Navigator
         initialRouteName="Home"
@@ -166,43 +266,43 @@ const BottomTabNavigator = () => {
               route={route}
               focused={focused}
               size={size}
-              color={focused ? Palette.primary : Palette.textMuted} // <-- use Palette
+              color={focused ? Palette.primary : Palette.textMuted}
             />
           ),
           tabBarLabelStyle: {
             fontSize: 12,
             fontFamily: 'Poppins-Medium',
             marginBottom: 5,
+            fontWeight: focused ? '600' : '400',
           },
           tabBarStyle: {
             position: 'absolute',
             bottom: 0,
             left: 6,
             right: 6,
-            backgroundColor: Palette.bg,              // <-- use Palette
+            backgroundColor: Palette.bg,
             borderTopWidth: 0,
             height: 70,
             borderRadius: 20,
-            shadowColor: Palette.shadow,              // <-- use Palette
+            shadowColor: Palette.shadow,
             shadowOffset: { width: 0, height: 6 },
             shadowOpacity: 0.2,
             shadowRadius: 10,
-            elevation: 5,
+            elevation: 8,
             paddingBottom: 5,
             paddingTop: 5,
             marginBottom: 10,
           },
-          tabBarActiveTintColor: Palette.primary,     // <-- use Palette
-          tabBarInactiveTintColor: Palette.textMuted, // <-- use Palette
+          tabBarActiveTintColor: Palette.primary,
+          tabBarInactiveTintColor: Palette.textMuted,
           tabBarShowLabel: true,
           tabBarHideOnKeyboard: true,
         })}
       >
         <Tab.Screen name="Home"      component={HomeScreen}      options={{ tabBarLabel: 'Home' }} />
-        {/* <Tab.Screen name="Textbooks" component={TextbooksScreen} options={{ tabBarLabel: 'Textbooks' }} />
-        <Tab.Screen name="Tests"     component={OnlineTestScreen} options={{ tabBarLabel: 'Tests' }} /> */}
-        {/* If you want an Admin tab, add it conditionally but still coloured with Palette */}
-        {/* {isAdmin && <Tab.Screen name="Admin" component={AdminPanel} />} */}
+        <Tab.Screen name="Journal"   component={JournalScreen}   options={{ tabBarLabel: 'Journal' }} />
+        <Tab.Screen name="Tools"     component={ToolsScreen}     options={{ tabBarLabel: 'Tools' }} />
+        <Tab.Screen name="Progress"  component={ProgressScreen}  options={{ tabBarLabel: 'Progress' }} />
       </Tab.Navigator>
     </>
   );
@@ -216,17 +316,34 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: Platform.OS === 'ios' ? 100 : 85,
     right: 24,
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: Palette.shadow,         // <-- use Palette
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 10,
     zIndex: 10,
+  },
+  pulseRing: {
+    position: 'absolute',
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'rgba(247, 37, 133, 0.3)',
+    borderWidth: 2,
+    borderColor: 'rgba(247, 37, 133, 0.5)',
+  },
+  emergencyFab: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#f72585',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#f72585',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 12,
   },
   fabGradient: {
     width: 60,
@@ -238,3 +355,4 @@ const styles = StyleSheet.create({
 });
 
 export default BottomTabNavigator;
+
