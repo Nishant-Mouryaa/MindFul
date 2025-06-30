@@ -20,6 +20,7 @@ import HomeScreen from '../screens/home/HomeScreen';
 import JournalScreen from '../screens/mental-health/JournalScreen';
 import ToolsScreen from '../screens/mental-health/ToolsScreen';
 import ProgressScreen from '../screens/mental-health/ProgressScreen';
+import AdminPanel from '../screens/AdminPanel';
 
 import { Palette } from '../theme/colors';
 
@@ -181,7 +182,7 @@ const QuickAboutFAB = () => {
 };
 
 /* ------------------------------------------------------------------ */
-/* Floating “Quick Test” FAB                                          */
+/* Floating "Quick Test" FAB                                          */
 /* ------------------------------------------------------------------ */
 const QuickTestFAB = () => {
   const navigation = useNavigation();
@@ -250,68 +251,60 @@ const BottomTabNavigator = () => {
       }
     };
     checkAdminStatus();
-  }, []);
+  }, [auth.currentUser]);
+
+  const commonScreenOptions = ({ route }) => ({
+    headerShown: false,
+    tabBarIcon: (props) => <TabBarIcon route={route} {...props} />,
+  });
 
   return (
     <>
-      {/* Enhanced Emergency FAB */}
-      <EmergencyFAB />
-
       <Tab.Navigator
-        initialRouteName="Home"
         screenOptions={({ route }) => ({
           headerShown: false,
-          tabBarIcon: ({ focused, size }) => (
-            <TabBarIcon
-              route={route}
-              focused={focused}
-              size={size}
-              color={focused ? Palette.primary : Palette.textMuted}
-            />
-          ),
-          tabBarLabelStyle: {
-            fontSize: 12,
-            fontFamily: 'Poppins-Medium',
-            marginBottom: 5,
-            fontWeight: focused ? '600' : '400',
-          },
-          tabBarStyle: {
-            position: 'absolute',
-            bottom: 0,
-            left: 6,
-            right: 6,
-            backgroundColor: Palette.bg,
-            borderTopWidth: 0,
-            height: 70,
-            borderRadius: 20,
-            shadowColor: Palette.shadow,
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: 0.2,
-            shadowRadius: 10,
-            elevation: 8,
-            paddingBottom: 5,
-            paddingTop: 5,
-            marginBottom: 10,
-          },
+          tabBarIcon: (props) => <TabBarIcon route={route} {...props} />,
+          tabBarStyle: styles.tabBar,
           tabBarActiveTintColor: Palette.primary,
           tabBarInactiveTintColor: Palette.textMuted,
-          tabBarShowLabel: true,
-          tabBarHideOnKeyboard: true,
+          tabBarShowLabel: false,
         })}
       >
-        <Tab.Screen name="Home"      component={HomeScreen}      options={{ tabBarLabel: 'Home' }} />
-        <Tab.Screen name="Journal"   component={JournalScreen}   options={{ tabBarLabel: 'Journal' }} />
-        <Tab.Screen name="Tools"     component={ToolsScreen}     options={{ tabBarLabel: 'Tools' }} />
-        <Tab.Screen name="Progress"  component={ProgressScreen}  options={{ tabBarLabel: 'Progress' }} />
+        <Tab.Screen name="Home"      component={HomeScreen} />
+        <Tab.Screen name="Journal"   component={JournalScreen} />
+        <Tab.Screen name="Tools"     component={ToolsScreen} />
+        <Tab.Screen name="Progress"  component={ProgressScreen} />
+        {isAdmin && (
+          <Tab.Screen name="Admin" component={AdminPanel} />
+        )}
       </Tab.Navigator>
+      <EmergencyFAB />
     </>
   );
 };
 
 /* ------------------------------------------------------------------ */
-/* Styles (only structural stuff lives here)                          */
+/* Styles                                                             */
 /* ------------------------------------------------------------------ */
 const styles = StyleSheet.create({
+  tabBar: {
+    position: 'absolute',
+    bottom: 25,
+    left: 20,
+    right: 20,
+    elevation: 3,
+    backgroundColor: '#ffffff',
+    borderRadius: 15,
+    height: 60,
+    borderTopWidth: 0,
+    shadowColor: Palette.shadow,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.5,
+  },
   fabContainer: {
     position: 'absolute',
     bottom: Platform.OS === 'ios' ? 100 : 85,
@@ -321,6 +314,11 @@ const styles = StyleSheet.create({
     borderRadius: 35,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 8,
     zIndex: 10,
   },
   pulseRing: {
@@ -328,29 +326,22 @@ const styles = StyleSheet.create({
     width: 70,
     height: 70,
     borderRadius: 35,
-    backgroundColor: 'rgba(247, 37, 133, 0.3)',
-    borderWidth: 2,
-    borderColor: 'rgba(247, 37, 133, 0.5)',
+    backgroundColor: 'rgba(229, 115, 115, 0.4)',
   },
   emergencyFab: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#f72585',
-    justifyContent: 'center',
+    backgroundColor: '#E57373',
     alignItems: 'center',
-    shadowColor: '#f72585',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 12,
+    justifyContent: 'center',
   },
   fabGradient: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

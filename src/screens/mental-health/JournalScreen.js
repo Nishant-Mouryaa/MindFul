@@ -9,9 +9,15 @@ import {
   SafeAreaView,
   Alert,
   Modal,
-  Animated
+  Animated,
+  KeyboardAvoidingView,
+  Platform
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { getAuth } from 'firebase/auth';
+import { doc, setDoc, getDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
+import { db } from '../../config/firebase'; // Your Firebase config
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function JournalScreen() {
   const [journalEntries, setJournalEntries] = useState([]);
@@ -20,453 +26,585 @@ export default function JournalScreen() {
   const [mood, setMood] = useState(null);
   const [showNewEntry, setShowNewEntry] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState(null);
-  const [showEntryModal, setShowEntryModal] = useState(false);
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   const moodOptions = [
-    { icon: 'emoticon-sad-outline', label: 'Sad', value: 'sad', color: '#5DADE2' },
-    { icon: 'emoticon-frown-outline', label: 'Down', value: 'down', color: '#7FB3D5' },
-    { icon: 'emoticon-neutral-outline', label: 'Neutral', value: 'neutral', color: '#AAB7B8' },
-    { icon: 'emoticon-happy-outline', label: 'Good', value: 'good', color: '#58D68D' },
-    { icon: 'emoticon-excited-outline', label: 'Great', value: 'great', color: '#52BE80' },
-    { icon: 'emoticon-angry-outline', label: 'Angry', value: 'angry', color: '#EC7063' },
-    { icon: 'emoticon-confused-outline', label: 'Anxious', value: 'anxious', color: '#F1948A' },
-    { icon: 'emoticon-tired-outline', label: 'Tired', value: 'tired', color: '#BB8FCE' },
+    { label: 'Great', value: 'great', icon: 'emoticon-excited-outline', color: '#58D68D' },
+    { label: 'Good', value: 'good', icon: 'emoticon-happy-outline', color: '#81C784' },
+    { label: 'Neutral', value: 'neutral', icon: 'emoticon-neutral-outline', color: '#AAB7B8' },
+    { label: 'Down', value: 'down', icon: 'emoticon-sad-outline', color: '#7FB3D5' },
+    { label: 'Sad', value: 'sad', icon: 'emoticon-frown-outline', color: '#5DADE2' },
+    { label: 'Anxious', value: 'anxious', icon: 'emoticon-confused-outline', color: '#F1948A' },
+    { label: 'Angry', value: 'angry', icon: 'emoticon-angry-outline', color: '#EC7063' },
+    { label: 'Tired', value: 'tired', icon: 'emoticon-tired-outline', color: '#BB8FCE' },
   ];
 
   const prompts = [
-    "How are you feeling today?",
-    "What's been on your mind lately?",
-    "What made you smile today?",
-    "What's challenging you right now?",
-    "What are you grateful for?",
-    "What would you like to improve about yourself?",
-    "Describe your perfect day...",
-    "What's something you're looking forward to?",
+    "What's one thing that went well today?",
+    "Describe a challenge you faced and how you handled it.",
+    "What are three things you're grateful for right now?",
+    "If you could tell your past self one thing, what would it be?",
+    "What's a goal you're working towards and what's your next step?",
   ];
+  const [currentPrompt, setCurrentPrompt] = useState('');
+
+
+
+  
 
   useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 800,
-      useNativeDriver: true,
-    }).start();
-  }, []);
+    Animated.stagger(100,
+        journalEntries.map((_, i) =>
+        Animated.spring(fadeAnim, {
+            toValue: 1,
+            useNativeDriver: true,
+            delay: i * 100
+        }))
+    ).start();
+  }, [journalEntries]);
 
-  const saveEntry = () => {
-    if (!currentEntry.trim()) {
-      Alert.alert('Empty Entry', 'Please write something before saving.');
-      return;
+  useEffect(() => {
+    if(showNewEntry){
+        setCurrentPrompt(prompts[Math.floor(Math.random() * prompts.length)]);
+    }
+  }, [showNewEntry])
+
+
+// Add these useEffect hooks
+useEffect(() => {
+  loadJournalEntries();
+}, []);
+
+const loadJournalEntries = async () => {
+  try {
+    // First try to load from local storage for instant display
+    const localEntries = await AsyncStorage.getItem('journalEntries');
+    if (localEntries) {
+      setJournalEntries(JSON.parse(localEntries));
+    }
+    
+    // Then sync with Firebase
+    const auth = getAuth();
+    if (auth.currentUser) {
+      const q = query(collection(db, "journals"), where("userId", "==", auth.currentUser.uid));
+      const querySnapshot = await getDocs(q);
+      const firebaseEntries = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        // Convert Firestore timestamp to ISO string if needed
+        date: doc.data().date?.toDate()?.toISOString() || doc.data().date
+      }));
+      
+      // Merge and deduplicate entries
+      const mergedEntries = [...firebaseEntries, ...(localEntries ? JSON.parse(localEntries) : [])]
+        .filter((entry, index, self) => 
+          index === self.findIndex(e => e.id === entry.id)
+        )
+        .sort((a,b) => new Date(b.date) - new Date(a.date));
+      
+      setJournalEntries(mergedEntries);
+      await AsyncStorage.setItem('journalEntries', JSON.stringify(mergedEntries));
+    }
+  } catch (error) {
+    console.error("Error loading entries:", error);
+  }
+};
+
+const saveEntry = async () => {
+  if (!currentEntry.trim() && !entryTitle.trim()) {
+    Alert.alert('Empty Entry', 'Your entry is empty. Please write something or add a title before saving.');
+    return;
+  }
+
+  const newEntry = {
+    id: Date.now().toString(), // Use string ID for Firestore
+    title: entryTitle.trim() || 'Untitled Entry',
+    content: currentEntry,
+    mood: mood,
+    date: new Date().toISOString(),
+    userId: getAuth().currentUser?.uid
+  };
+
+  try {
+    // Save to local storage first for instant feedback
+    const updatedEntries = [newEntry, ...journalEntries];
+    setJournalEntries(updatedEntries);
+    await AsyncStorage.setItem('journalEntries', JSON.stringify(updatedEntries));
+    
+    // Save to Firebase if user is authenticated
+    if (getAuth().currentUser) {
+      await setDoc(doc(db, "journals", newEntry.id), newEntry);
     }
 
-    const newEntry = {
-      id: Date.now(),
-      title: entryTitle.trim() || `Journal Entry ${journalEntries.length + 1}`,
-      content: currentEntry,
-      mood: mood,
-      date: new Date().toISOString(),
-      prompt: prompts[Math.floor(Math.random() * prompts.length)],
-    };
-
-    setJournalEntries(prev => [newEntry, ...prev]);
     setCurrentEntry('');
     setEntryTitle('');
     setMood(null);
     setShowNewEntry(false);
     Alert.alert('Saved!', 'Your journal entry has been saved.');
-  };
+  } catch (error) {
+    console.error("Error saving entry:", error);
+    Alert.alert('Error', 'Failed to save your entry. Please try again.');
+  }
+};
 
-  const deleteEntry = (entryId) => {
-    Alert.alert(
-      'Delete Entry',
-      'Are you sure you want to delete this entry?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            setJournalEntries(prev => prev.filter(entry => entry.id !== entryId));
-            setShowEntryModal(false);
-          },
+const deleteEntry = async (entryId) => {
+  Alert.alert(
+    'Delete Entry',
+    'Are you sure you want to permanently delete this journal entry?',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            // Remove from local storage
+            const updatedEntries = journalEntries.filter(entry => entry.id !== entryId);
+            setJournalEntries(updatedEntries);
+            await AsyncStorage.setItem('journalEntries', JSON.stringify(updatedEntries));
+            
+            // Remove from Firebase if user is authenticated
+            if (getAuth().currentUser) {
+              await deleteDoc(doc(db, "journals", entryId));
+            }
+            
+            setSelectedEntry(null);
+          } catch (error) {
+            console.error("Error deleting entry:", error);
+            Alert.alert('Error', 'Failed to delete the entry. Please try again.');
+          }
         },
-      ]
-    );
-  };
+      },
+    ]
+  );
+};
 
   const openEntry = (entry) => {
     setSelectedEntry(entry);
-    setShowEntryModal(true);
   };
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const day = date.toLocaleDateString('en-US', { day: 'numeric' });
+    const month = date.toLocaleDateString('en-US', { month: 'short' });
+    return { day, month };
   };
 
-  const getMoodIcon = (moodValue) => {
-    const moodOption = moodOptions.find(option => option.value === moodValue);
-    return moodOption ? moodOption.icon : 'book-open';
+  const getMood = (moodValue) => {
+    return moodOptions.find(option => option.value === moodValue);
   };
 
-  const getMoodColor = (moodValue) => {
-    const moodOption = moodOptions.find(option => option.value === moodValue);
-    return moodOption ? moodOption.color : '#AAB7B8';
-  };
+  const renderJournalEntry = (entry) => {
+      const { day, month } = formatDate(entry.date);
+      const mood = getMood(entry.mood);
+      return (
+        <TouchableOpacity key={entry.id} style={styles.entryCard} onPress={() => openEntry(entry)}>
+            <View style={[styles.dateBadge, {backgroundColor: mood ? mood.color : '#AAB7B8'}]}>
+                <Text style={styles.dateDay}>{day}</Text>
+                <Text style={styles.dateMonth}>{month.toUpperCase()}</Text>
+            </View>
+            <View style={styles.entryContent}>
+                <Text style={styles.entryTitle} numberOfLines={1}>{entry.title}</Text>
+                <Text style={styles.entrySnippet} numberOfLines={2}>
+                    {entry.content || 'No additional text.'}
+                </Text>
+            </View>
+            {mood && <MaterialCommunityIcons name={mood.icon} size={28} color={mood.color} style={styles.moodIcon} />}
+            <MaterialCommunityIcons name="chevron-right" size={24} color="#ccc" />
+        </TouchableOpacity>
+      )
+  }
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Journal</Text>
-          <Text style={styles.subtitle}>Write your thoughts and feelings</Text>
+      {/* Modified Header with New Entry Button */}
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <Text style={styles.title}>My Journal</Text>
+          <TouchableOpacity 
+            style={styles.newEntryHeaderButton}
+            onPress={() => setShowNewEntry(true)}
+          >
+            <MaterialCommunityIcons name="plus" size={24} color="#fff" />
+            <Text style={styles.newEntryHeaderButtonText}>New</Text>
+          </TouchableOpacity>
         </View>
-
-        {/* New Entry Button */}
-        <TouchableOpacity 
-          style={styles.newEntryButton}
-          onPress={() => setShowNewEntry(true)}
-        >
-          <MaterialCommunityIcons name="plus" size={24} color="#fff" />
-          <Text style={styles.newEntryButtonText}>New Entry</Text>
-        </TouchableOpacity>
-
-        {/* Journal Entries */}
-        <Animated.View style={[styles.entriesContainer, { opacity: fadeAnim }]}>
-          {journalEntries.length === 0 ? (
-            <View style={styles.emptyState}>
-              <MaterialCommunityIcons name="book-open-variant" size={60} color="#AAB7B8" />
-              <Text style={styles.emptyStateTitle}>No entries yet</Text>
-              <Text style={styles.emptyStateText}>
-                Start writing to track your thoughts and feelings
-              </Text>
-            </View>
-          ) : (
-            journalEntries.map((entry) => (
-              <TouchableOpacity
-                key={entry.id}
-                style={styles.entryCard}
-                onPress={() => openEntry(entry)}
-              >
-                <View style={styles.entryHeader}>
-                  <Text style={styles.entryTitle}>{entry.title}</Text>
-                  <MaterialCommunityIcons 
-                    name={getMoodIcon(entry.mood)} 
-                    size={24} 
-                    color={getMoodColor(entry.mood)} 
-                  />
-                </View>
-                <Text style={styles.entryContent} numberOfLines={3}>
-                  {entry.content}
-                </Text>
-                <Text style={styles.entryDate}>{formatDate(entry.date)}</Text>
-              </TouchableOpacity>
-            ))
-          )}
-        </Animated.View>
+        <Text style={styles.subtitle}>A space for your thoughts, feelings, and reflections.</Text>
+      </View>
+      
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {journalEntries.length === 0 ? (
+          <View style={styles.emptyState}>
+            <MaterialCommunityIcons name="notebook-edit-outline" size={80} color="#CED4DA" />
+            <Text style={styles.emptyStateTitle}>Your journal is empty</Text>
+            <Text style={styles.emptyStateText}>
+              Tap the "New" button above to start writing
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.entriesContainer}>
+            {journalEntries.map(entry => renderJournalEntry(entry))}
+          </View>
+        )}
       </ScrollView>
 
-      {/* New Entry Modal */}
+
+      {/* New/Edit Entry Modal */}
       <Modal
         visible={showNewEntry}
         animationType="slide"
-        presentationStyle="pageSheet"
+        onRequestClose={() => setShowNewEntry(false)}
       >
-        <SafeAreaView style={styles.modalContainer}>
+        <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+            style={styles.modalContainer}>
+        <SafeAreaView style={{flex: 1}}>
           <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>New Entry</Text>
             <TouchableOpacity onPress={() => setShowNewEntry(false)}>
-              <MaterialCommunityIcons name="close" size={24} color="#333" />
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>New Journal Entry</Text>
-            <TouchableOpacity onPress={saveEntry}>
-              <Text style={styles.saveButton}>Save</Text>
+                <MaterialCommunityIcons name="close" size={28} color="#999" />
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.modalContent}>
-            {/* Title Input */}
             <TextInput
               style={styles.titleInput}
-              placeholder="Entry title (optional)"
-              placeholderTextColor="#999"
+              placeholder="Give your entry a title..."
+              placeholderTextColor="#B0B0B0"
               value={entryTitle}
               onChangeText={setEntryTitle}
             />
 
-            {/* Mood Selection */}
-            <Text style={styles.moodLabel}>How are you feeling?</Text>
+            <View style={styles.promptContainer}>
+                <MaterialCommunityIcons name="lightbulb-on-outline" size={24} color="#FFB74D" />
+                <Text style={styles.promptText}>{currentPrompt}</Text>
+            </View>
+
+            <TextInput
+              style={styles.contentInput}
+              placeholder="Write what's on your mind..."
+              placeholderTextColor="#B0B0B0"
+              value={currentEntry}
+              onChangeText={setCurrentEntry}
+              multiline
+            />
+            
+            <Text style={styles.moodLabel}>How are you feeling right now?</Text>
             <View style={styles.moodContainer}>
               {moodOptions.map((moodOption) => (
                 <TouchableOpacity
                   key={moodOption.value}
-                  style={[
-                    styles.moodButton,
-                    mood === moodOption.value && { 
-                      backgroundColor: moodOption.color + '20',
-                      borderColor: moodOption.color
-                    },
-                  ]}
+                  style={[ styles.moodButton, mood === moodOption.value && { backgroundColor: moodOption.color + '30', borderColor: moodOption.color }]}
                   onPress={() => setMood(moodOption.value)}
                 >
-                  <MaterialCommunityIcons 
-                    name={moodOption.icon} 
-                    size={28} 
-                    color={moodOption.color} 
-                  />
-                  <Text style={styles.moodText}>{moodOption.label}</Text>
+                  <MaterialCommunityIcons name={moodOption.icon} size={32} color={moodOption.color} />
                 </TouchableOpacity>
               ))}
             </View>
-
-            {/* Content Input */}
-            <TextInput
-              style={styles.contentInput}
-              placeholder="Write your thoughts here..."
-              placeholderTextColor="#999"
-              value={currentEntry}
-              onChangeText={setCurrentEntry}
-              multiline
-              textAlignVertical="top"
-            />
           </ScrollView>
+          <View style={styles.modalFooter}>
+            <TouchableOpacity style={styles.saveButton} onPress={saveEntry}>
+                <Text style={styles.saveButtonText}>Save Entry</Text>
+            </TouchableOpacity>
+          </View>
         </SafeAreaView>
+        </KeyboardAvoidingView>
       </Modal>
 
-      {/* Entry Detail Modal */}
+      {/* View Entry Modal */}
       <Modal
-        visible={showEntryModal}
+        visible={!!selectedEntry}
         animationType="slide"
-        presentationStyle="pageSheet"
+        onRequestClose={() => setSelectedEntry(null)}
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowEntryModal(false)}>
-              <MaterialCommunityIcons name="close" size={24} color="#333" />
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Journal Entry</Text>
-            <TouchableOpacity onPress={() => deleteEntry(selectedEntry?.id)}>
-              <MaterialCommunityIcons name="delete" size={24} color="#E74C3C" />
+            <Text style={styles.modalTitle} numberOfLines={1}>{selectedEntry?.title}</Text>
+            <TouchableOpacity onPress={() => setSelectedEntry(null)}>
+                <MaterialCommunityIcons name="close" size={28} color="#999" />
             </TouchableOpacity>
           </View>
-
-          <ScrollView style={styles.modalContent}>
-            {selectedEntry && (
-              <>
-                <View style={styles.detailHeader}>
-                  <Text style={styles.detailTitle}>{selectedEntry.title}</Text>
-                  <MaterialCommunityIcons 
-                    name={getMoodIcon(selectedEntry.mood)} 
-                    size={28} 
-                    color={getMoodColor(selectedEntry.mood)} 
-                  />
+          {selectedEntry && 
+            <ScrollView style={styles.modalContent}>
+                <View style={styles.viewHeader}>
+                    <Text style={styles.viewDate}>
+                        {new Date(selectedEntry.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                    </Text>
+                    {getMood(selectedEntry.mood) && 
+                        <View style={[styles.viewMoodBadge, {backgroundColor: getMood(selectedEntry.mood).color + '20'}]}>
+                            <MaterialCommunityIcons name={getMood(selectedEntry.mood).icon} size={18} color={getMood(selectedEntry.mood).color}/>
+                            <Text style={[styles.viewMoodText, {color: getMood(selectedEntry.mood).color}]}>{getMood(selectedEntry.mood).label}</Text>
+                        </View>
+                    }
                 </View>
-                <Text style={styles.detailDate}>{formatDate(selectedEntry.date)}</Text>
-                <Text style={styles.detailContent}>{selectedEntry.content}</Text>
-              </>
-            )}
-          </ScrollView>
+                <Text style={styles.viewContent}>{selectedEntry.content}</Text>
+            </ScrollView>
+          }
+          <View style={styles.modalFooter}>
+            <TouchableOpacity style={styles.deleteButton} onPress={() => deleteEntry(selectedEntry.id)}>
+                <MaterialCommunityIcons name="trash-can-outline" size={22} color="#E57373" />
+                <Text style={styles.deleteButtonText}>Delete</Text>
+            </TouchableOpacity>
+          </View>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
-  scrollContent: {
-    flexGrow: 1,
-    padding: 20,
-  },
-  header: {
-    alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 30,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-  },
-  newEntryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#4DB6AC',
-    paddingVertical: 16,
-    borderRadius: 12,
-    marginBottom: 24,
-  },
-  newEntryButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-    marginLeft: 8,
-  },
-  entriesContainer: {
-    flex: 1,
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-  },
-  emptyStateTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyStateText: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-  },
-  entryCard: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#EDEDED',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  entryHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  entryTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    flex: 1,
-  },
-  entryContent: {
-    fontSize: 14,
-    color: '#555',
-    lineHeight: 20,
-    marginBottom: 8,
-  },
-  entryDate: {
-    fontSize: 12,
-    color: '#999',
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    paddingTop: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EDEDED',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  saveButton: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#4DB6AC',
-  },
-  modalContent: {
-    flex: 1,
-    padding: 20,
-  },
-  titleInput: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: '#333',
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#EDEDED',
-  },
-  moodLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
-  },
-  moodContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  moodButton: {
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: '#F5F5F5',
-    width: '23%',
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#EDEDED',
-  },
-  moodText: {
-    fontSize: 12,
-    color: '#333',
-    marginTop: 4,
-  },
-  contentInput: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: '#333',
-    minHeight: 200,
-    borderWidth: 1,
-    borderColor: '#EDEDED',
-  },
-  detailHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  detailTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    flex: 1,
-  },
-  detailDate: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 16,
-  },
-  detailContent: {
-    fontSize: 16,
-    color: '#333',
-    lineHeight: 24,
-  },
+
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: '#F8F9FA',
+    },
+    header: {
+      padding: 20,
+      paddingBottom: 15,
+    },
+    headerTop: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: 'bold',
+      color: '#333',
+    },
+    subtitle: {
+      fontSize: 16,
+      color: '#666',
+      marginTop: 4,
+    },
+    scrollContent: {
+      padding: 20,
+      paddingTop: 10,
+      paddingBottom: 100, // Added to prevent content from being hidden behind FAB
+    },
+    newEntryHeaderButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#64B5F6',
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 20,
+      elevation: 2,
+    },
+    newEntryHeaderButtonText: {
+      color: '#fff',
+      fontSize: 16,
+      fontWeight: '600',
+      marginLeft: 6,
+    },
+  
+    // Adjust empty state text since button moved
+    emptyStateText: {
+      fontSize: 16,
+      color: '#666',
+      textAlign: 'center',
+      lineHeight: 22,
+      marginTop: 8,
+    },
+    emptyState: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 40,
+        marginTop: 50,
+    },
+    emptyStateTitle: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: '#555',
+        marginTop: 20,
+        marginBottom: 10,
+    },
+    
+    entriesContainer: {},
+    entryCard: {
+        flexDirection: 'row',
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        padding: 15,
+        marginBottom: 15,
+        alignItems: 'center',
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+    },
+    dateBadge: {
+        borderRadius: 10,
+        padding: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 15,
+        height: 60,
+        width: 60,
+    },
+    dateDay: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: '#fff',
+    },
+    dateMonth: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: '#fff',
+        marginTop: 2,
+    },
+    entryContent: {
+        flex: 1,
+    },
+    entryTitle: {
+        fontSize: 17,
+        fontWeight: 'bold',
+        color: '#333',
+        marginBottom: 5,
+    },
+    entrySnippet: {
+        fontSize: 14,
+        color: '#666',
+        lineHeight: 20,
+    },
+    moodIcon: {
+        marginLeft: 10,
+    },
+    // Modal Styles
+    modalContainer: {
+        flex: 1,
+        backgroundColor: '#F8F9FA',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E0E0E0',
+    },
+    modalTitle: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: '#333',
+        flex: 1,
+        textAlign: 'center',
+        marginHorizontal: 10,
+    },
+    modalContent: {
+        padding: 20,
+    },
+    titleInput: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#333',
+        paddingBottom: 10,
+        marginBottom: 20,
+    },
+    promptContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFF8E1',
+        borderRadius: 10,
+        padding: 15,
+        marginBottom: 20,
+    },
+    promptText: {
+        flex: 1,
+        fontSize: 15,
+        color: '#6D4C41',
+        marginLeft: 10,
+        fontStyle: 'italic',
+    },
+    contentInput: {
+        fontSize: 17,
+        color: '#333',
+        minHeight: 200,
+        lineHeight: 24,
+    },
+    moodLabel: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#333',
+        marginTop: 20,
+        marginBottom: 15,
+    },
+    moodContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        flexWrap: 'wrap',
+    },
+    moodButton: {
+        alignItems: 'center',
+        padding: 10,
+        borderRadius: 10,
+        borderWidth: 2,
+        borderColor: 'transparent',
+        width: '22%',
+        marginBottom: 10,
+    },
+    modalFooter: {
+        padding: 20,
+        borderTopWidth: 1,
+        borderTopColor: '#E0E0E0'
+    },
+    saveButton: {
+        backgroundColor: '#64B5F6',
+        padding: 15,
+        borderRadius: 30,
+        alignItems: 'center',
+    },
+    saveButtonText: {
+        color: '#fff',
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    // View Entry Modal
+    viewHeader: {
+        paddingBottom: 15,
+        marginBottom: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee'
+    },
+    viewDate: {
+        fontSize: 14,
+        color: '#666',
+        marginBottom: 10,
+    },
+    viewMoodBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+        borderRadius: 20,
+        paddingVertical: 5,
+        paddingHorizontal: 10,
+    },
+    viewMoodText: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        marginLeft: 5,
+    },
+    viewContent: {
+        fontSize: 17,
+        color: '#333',
+        lineHeight: 26,
+    },
+    deleteButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#FFEBEE',
+        padding: 15,
+        borderRadius: 30,
+    },
+    deleteButtonText: {
+        color: '#E57373',
+        fontSize: 16,
+        fontWeight: 'bold',
+        marginLeft: 8
+    }
 });

@@ -9,7 +9,6 @@ import { useEffect, useState } from 'react';
 // Import all your screens
 import LoginScreen from '../screens/auth/LoginScreen';
 import SignupScreen from '../screens/auth/SignupScreen';
-import OnboardingScreen from '../screens/onboarding/OnboardingScreen';
 import BottomTabNavigator from './BottomTabNavigator';
 import HomeScreen from '../screens/home/HomeScreen';
 import WorkoutScreen from '../screens/workout/WorkoutScreen';
@@ -17,22 +16,20 @@ import LogWorkoutScreen from '../screens/workout/LogWorkoutScreen';
 import ProgressScreen from '../screens/progress/ProgressScreen';
 import TipsScreen from '../screens/tips/TipsScreen';
 import AcademyScreen from '../screens/academy/AcademyScreen';
+import BreathingScreen from '../screens/mental-health/BreathingScreen';
+import CBTScreen from '../screens/mental-health/CBTScreen';
+import GroundingScreen from '../screens/mental-health/GroundingScreen';
+import JournalScreen from '../screens/mental-health/JournalScreen';
+import EmergencyResourcesScreen from '../screens/mental-health/EmergencyResourcesScreen';
 
 const AuthStack = createStackNavigator();
 const AppStack = createStackNavigator();
-const OnboardingStack = createStackNavigator();
 
 const AuthNavigator = () => (
   <AuthStack.Navigator screenOptions={{ headerShown: false }}>
     <AuthStack.Screen name="Login" component={LoginScreen} />
     <AuthStack.Screen name="Signup" component={SignupScreen} />
   </AuthStack.Navigator>
-);
-
-const OnboardingNavigator = () => (
-  <OnboardingStack.Navigator screenOptions={{ headerShown: false }}>
-    <OnboardingStack.Screen name="Onboarding" component={OnboardingScreen} />
-  </OnboardingStack.Navigator>
 );
 
 const MainNavigator = () => (
@@ -44,6 +41,11 @@ const MainNavigator = () => (
     <AppStack.Screen name="Progress" component={ProgressScreen} />
     <AppStack.Screen name="Tips" component={TipsScreen} />
     <AppStack.Screen name="Academy" component={AcademyScreen} />
+    <AppStack.Screen name="Breathing" component={BreathingScreen} />
+    <AppStack.Screen name="CBT" component={CBTScreen} />
+    <AppStack.Screen name="Grounding" component={GroundingScreen} />
+    <AppStack.Screen name="Journal" component={JournalScreen} />
+    <AppStack.Screen name="EmergencyResources" component={EmergencyResourcesScreen} />
     {/* ... other screens */}
   </AppStack.Navigator>
 );
@@ -51,7 +53,6 @@ const MainNavigator = () => (
 export default function AppNavigator() {
   const [authState, setAuthState] = useState({
     isAuthenticated: false,
-    needsOnboarding: true,
     isLoading: true
   });
 
@@ -59,53 +60,10 @@ export default function AppNavigator() {
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        // Once we have a user, listen to that user's document in real-time
-        const docRef = doc(db, 'users', user.uid);
-        const unsubscribeDoc = onSnapshot(
-          docRef,
-          (snapshot) => {
-            if (!snapshot.exists()) {
-              // If no doc yet, assume we need onboarding
-              setAuthState({
-                isAuthenticated: true,
-                needsOnboarding: true,
-                isLoading: false
-              });
-            } else {
-              // If doc exists, see if user has onboardingComplete
-              const data = snapshot.data();
-              const isDone = data.onboardingComplete === true;
-              setAuthState({
-                isAuthenticated: true,
-                needsOnboarding: !isDone, // false if done
-                isLoading: false
-              });
-            }
-          },
-          (error) => {
-            console.error('onSnapshot error:', error);
-            // If there's an error, assume we still need onboarding for safety
-            setAuthState({
-              isAuthenticated: true,
-              needsOnboarding: true,
-              isLoading: false
-            });
-          }
-        );
-
-        // Return unsubscribe function for the doc listener
-        return () => {
-          unsubscribeDoc();
-        };
-      } else {
-        // If user is not logged in, no doc to listen to
         setAuthState({
-          isAuthenticated: false,
-          needsOnboarding: true,
-          isLoading: false
+            isAuthenticated: !!user,
+            isLoading: false
         });
-      }
     });
 
     // Cleanup the auth subscription
@@ -120,16 +78,7 @@ export default function AppNavigator() {
   // Decide which navigator to show
   return (
     <NavigationContainer>
-      {!authState.isAuthenticated ? (
-        // User not authenticated -> show Auth flow
-        <AuthNavigator />
-      ) : authState.needsOnboarding ? (
-        // User is authenticated but not onboarded -> show Onboarding
-        <OnboardingNavigator />
-      ) : (
-        // User is authenticated and done onboarding -> show main
-        <MainNavigator />
-      )}
+      {authState.isAuthenticated ? <MainNavigator /> : <AuthNavigator />}
     </NavigationContainer>
   );
 }

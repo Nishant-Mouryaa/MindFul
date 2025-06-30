@@ -1,22 +1,22 @@
 export const Palette = {
     /* Brand */
-    primary:        '#d32f2f',
-    primaryLight:   '#ff6659',             // 20 % lighter
-    primaryXLight:  'rgba(211,47,47,0.1)', // circles & subtle tints
-    primaryXXLight: 'rgba(211,47,47,0.05)',
-    primaryXXXL:    'rgba(211,47,47,0.01)', // background tints
+    primary:        '#64B5F6',
+    primaryLight:   '#90CAF9',             // 20 % lighter
+    primaryXLight:  'rgba(100, 181, 246, 0.1)', // circles & subtle tints
+    primaryXXLight: 'rgba(100, 181, 246, 0.05)',
+    primaryXXXL:    'rgba(100, 181, 246, 0.01)', // background tints
     iconlight:   '#ffffff',
-    iconDark:    '#000000',
+    iconDark:    '#333333',
   
   
     /* Greys */
-    bg:         '#ffffff',
+    bg:         '#F8F9FA',
     text:       '#333333',
     textMuted:  '#666666',
     textFaded:  '#999999',
   
     /* Misc */
-    shadow:     'rgba(0,0,0,0.2)',
+    shadow:     'rgba(0,0,0,0.1)',
   };
 
 

@@ -10,7 +10,8 @@ import {
   Dimensions,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+// Note: You would need to install react-native-svg and react-native-chart-kit
+// import { LineChart } from 'react-native-chart-kit';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -22,57 +23,70 @@ export default function ProgressScreen() {
   const progressData = {
     week: {
       moodAverage: 7.2,
+      moodData: [6, 7, 7.5, 8, 7, 6.5, 7.2],
       journalEntries: 5,
       breathingSessions: 8,
       groundingSessions: 3,
       cbtSessions: 2,
       streak: 7,
+      insights: [
+        { title: "Great Consistency!", description: "You've used a tool every day for the past 7 days. Keep it up!", icon: 'trophy-award', color: '#FFC107' },
+        { title: "Mood is Trending Up", description: "Your average mood is 0.5 points higher than last week.", icon: 'trending-up', color: '#4CAF50' },
+      ]
     },
     month: {
       moodAverage: 6.8,
+      moodData: [7, 6, 6.5, 7, 8, 7.5, 6, 6.5, 7.2, 7, 6, 6.8],
       journalEntries: 18,
       breathingSessions: 32,
       groundingSessions: 12,
       cbtSessions: 8,
       streak: 25,
+      insights: [
+        { title: "Journaling Power", description: "You've written 18 journal entries this month, a great way to process thoughts.", icon: 'notebook-edit', color: '#2196F3' },
+        { title: "Breathing is Key", description: "You've completed over 30 breathing sessions. This is a powerful stress reducer.", icon: 'weather-windy', color: '#4DB6AC' },
+      ]
     },
   };
 
   const currentData = progressData[selectedPeriod];
 
   useEffect(() => {
+    fadeAnim.setValue(0);
     Animated.timing(fadeAnim, {
       toValue: 1,
-      duration: 800,
+      duration: 500,
       useNativeDriver: true,
     }).start();
   }, [selectedPeriod]);
 
-  const StatCard = ({ title, value, subtitle, icon, color, gradient }) => (
+  const StatCard = ({ title, value, subtitle, icon, color }) => (
     <View style={styles.statCard}>
-      <LinearGradient
-        colors={gradient}
-        style={styles.statGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        <View style={styles.statHeader}>
-          <MaterialCommunityIcons name={icon} size={24} color="#fff" />
-          <Text style={styles.statTitle}>{title}</Text>
+        <View style={[styles.statIconContainer, {backgroundColor: color + '20'}]}>
+            <MaterialCommunityIcons name={icon} size={28} color={color} />
         </View>
-        <Text style={styles.statValue}>{value}</Text>
-        <Text style={styles.statSubtitle}>{subtitle}</Text>
-      </LinearGradient>
+        <View>
+            <Text style={styles.statValue}>{value}</Text>
+            <Text style={styles.statTitle}>{title}</Text>
+        </View>
     </View>
   );
 
+  const ActivityItem = ({ icon, label, value, color }) => (
+      <View style={styles.activityItem}>
+          <View style={[styles.activityIconContainer, {backgroundColor: color + '20'}]}>
+            <MaterialCommunityIcons name={icon} size={24} color={color}/>
+          </View>
+          <Text style={styles.activityLabel}>{label}</Text>
+          <Text style={styles.activityValue}>{value}</Text>
+      </View>
+  )
+
   const InsightCard = ({ title, description, icon, color }) => (
     <View style={styles.insightCard}>
-      <View style={[styles.insightIcon, { backgroundColor: color }]}>
-        <MaterialCommunityIcons name={icon} size={20} color="#fff" />
-      </View>
+      <MaterialCommunityIcons name={icon} size={24} color={color} style={styles.insightIcon}/>
       <View style={styles.insightContent}>
-        <Text style={styles.insightTitle}>{title}</Text>
+        <Text style={[styles.insightTitle, {color: color}]}>{title}</Text>
         <Text style={styles.insightDescription}>{description}</Text>
       </View>
     </View>
@@ -80,321 +94,259 @@ export default function ProgressScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <LinearGradient
-        colors={['#667eea', '#764ba2']}
-        style={styles.gradient}
-      >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.title}>Your Progress</Text>
-            <Text style={styles.subtitle}>
-              Track your mental health journey
-            </Text>
-          </View>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Your Progress</Text>
+          <Text style={styles.subtitle}>
+            Review your activity and gain insights into your mental wellness journey.
+          </Text>
+        </View>
 
-          {/* Period Selector */}
-          <View style={styles.periodSelector}>
-            <TouchableOpacity
-              style={[
-                styles.periodButton,
-                selectedPeriod === 'week' && styles.activePeriodButton,
-              ]}
-              onPress={() => setSelectedPeriod('week')}
-            >
-              <Text style={[
-                styles.periodText,
-                selectedPeriod === 'week' && styles.activePeriodText,
-              ]}>
-                This Week
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.periodButton,
-                selectedPeriod === 'month' && styles.activePeriodButton,
-              ]}
-              onPress={() => setSelectedPeriod('month')}
-            >
-              <Text style={[
-                styles.periodText,
-                selectedPeriod === 'month' && styles.activePeriodText,
-              ]}>
-                This Month
-              </Text>
-            </TouchableOpacity>
-          </View>
+        <View style={styles.periodSelector}>
+          <TouchableOpacity
+            style={[styles.periodButton, selectedPeriod === 'week' && styles.activePeriodButton]}
+            onPress={() => setSelectedPeriod('week')}
+          >
+            <Text style={[styles.periodText, selectedPeriod === 'week' && styles.activePeriodText]}>This Week</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.periodButton, selectedPeriod === 'month' && styles.activePeriodButton]}
+            onPress={() => setSelectedPeriod('month')}
+          >
+            <Text style={[styles.periodText, selectedPeriod === 'month' && styles.activePeriodText]}>This Month</Text>
+          </TouchableOpacity>
+        </View>
 
-          {/* Stats Grid */}
-          <Animated.View style={[styles.statsContainer, { opacity: fadeAnim }]}>
-            <View style={styles.statsRow}>
-              <StatCard
-                title="Mood Average"
-                value={currentData.moodAverage}
-                subtitle="out of 10"
-                icon="emoticon-happy"
-                color="#4cc9f0"
-                gradient={['#4cc9f0', '#4895ef']}
-              />
-              <StatCard
-                title="Current Streak"
-                value={currentData.streak}
-                subtitle="days"
-                icon="fire"
-                color="#f72585"
-                gradient={['#f72585', '#7209b7']}
-              />
-            </View>
-          </Animated.View>
-
-          {/* Activity Breakdown */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Activity Breakdown</Text>
-            <View style={styles.activityContainer}>
-              <View style={styles.activityItem}>
-                <MaterialCommunityIcons name="book-open" size={20} color="#4cc9f0" />
-                <Text style={styles.activityLabel}>Journal Entries</Text>
-                <Text style={styles.activityValue}>{currentData.journalEntries}</Text>
-              </View>
-              <View style={styles.activityItem}>
-                <MaterialCommunityIcons name="weather-windy" size={20} color="#4895ef" />
-                <Text style={styles.activityLabel}>Breathing Sessions</Text>
-                <Text style={styles.activityValue}>{currentData.breathingSessions}</Text>
-              </View>
-              <View style={styles.activityItem}>
-                <MaterialCommunityIcons name="earth" size={20} color="#4361ee" />
-                <Text style={styles.activityLabel}>Grounding Sessions</Text>
-                <Text style={styles.activityValue}>{currentData.groundingSessions}</Text>
-              </View>
-              <View style={styles.activityItem}>
-                <MaterialCommunityIcons name="brain" size={20} color="#3f37c9" />
-                <Text style={styles.activityLabel}>CBT Sessions</Text>
-                <Text style={styles.activityValue}>{currentData.cbtSessions}</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Insights */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Insights</Text>
-            <InsightCard
-              title="Great Consistency!"
-              description="You've maintained a 7-day streak of mental health practices."
-              icon="trophy"
-              color="#ffd700"
-            />
-            <InsightCard
-              title="Mood Improvement"
-              description="Your average mood has increased by 0.4 points this week."
-              icon="trending-up"
-              color="#4cc9f0"
-            />
-            <InsightCard
-              title="Journaling Habit"
-              description="You're writing in your journal 5 times per week on average."
-              icon="book-open"
-              color="#4895ef"
-            />
-          </View>
-
-          {/* Goals */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>This Week's Goals</Text>
-            <View style={styles.goalsContainer}>
-              <View style={styles.goalItem}>
-                <MaterialCommunityIcons name="target" size={20} color="#fff" />
-                <Text style={styles.goalText}>Complete 3 breathing sessions</Text>
-                <View style={styles.goalProgress}>
-                  <View style={[styles.goalProgressBar, { width: '60%' }]} />
+        <Animated.View style={{opacity: fadeAnim}}>
+            <View style={styles.card}>
+                <Text style={styles.cardTitle}>Key Stats</Text>
+                <View style={styles.statsContainer}>
+                    <StatCard
+                        title="Avg. Mood"
+                        value={currentData.moodAverage.toFixed(1)}
+                        icon="emoticon-happy-outline"
+                        color="#FFB74D"
+                    />
+                    <StatCard
+                        title="Current Streak"
+                        value={`${currentData.streak} days`}
+                        icon="fire"
+                        color="#E57373"
+                    />
                 </View>
-              </View>
-              <View style={styles.goalItem}>
-                <MaterialCommunityIcons name="target" size={20} color="#fff" />
-                <Text style={styles.goalText}>Write 4 journal entries</Text>
-                <View style={styles.goalProgress}>
-                  <View style={[styles.goalProgressBar, { width: '80%' }]} />
-                </View>
-              </View>
             </View>
-          </View>
-        </ScrollView>
-      </LinearGradient>
+
+            <View style={styles.card}>
+                <Text style={styles.cardTitle}>Mood Over Time</Text>
+                <View style={styles.chartPlaceholder}>
+                    <MaterialCommunityIcons name="chart-line" size={50} color="#CED4DA" />
+                    <Text style={styles.chartPlaceholderText}>Mood chart will be shown here</Text>
+                    {/* 
+                    <LineChart
+                        data={{
+                            labels: selectedPeriod === 'week' ? ['M', 'T', 'W', 'T', 'F', 'S', 'S'] : [],
+                            datasets: [{ data: currentData.moodData }]
+                        }}
+                        width={screenWidth - 80}
+                        height={220}
+                        chartConfig={chartConfig}
+                        bezier
+                        style={{ borderRadius: 16 }}
+                    /> 
+                    */}
+                </View>
+            </View>
+
+            <View style={styles.card}>
+                <Text style={styles.cardTitle}>Activity Breakdown</Text>
+                <ActivityItem icon="notebook-edit-outline" label="Journal Entries" value={currentData.journalEntries} color="#7986CB"/>
+                <ActivityItem icon="weather-windy" label="Breathing Sessions" value={currentData.breathingSessions} color="#4DB6AC"/>
+                <ActivityItem icon="earth" label="Grounding Sessions" value={currentData.groundingSessions} color="#64B5F6"/>
+                <ActivityItem icon="brain" label="CBT Exercises" value={currentData.cbtSessions} color="#BA68C8"/>
+            </View>
+
+            <View style={styles.card}>
+                <Text style={styles.cardTitle}>Your Insights</Text>
+                {currentData.insights.map((insight, index) => 
+                    <InsightCard key={index} {...insight} />
+                )}
+            </View>
+        </Animated.View>
+
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
+const chartConfig = {
+    backgroundGradientFrom: "#fff",
+    backgroundGradientTo: "#fff",
+    color: (opacity = 1) => `rgba(100, 181, 246, ${opacity})`,
+    strokeWidth: 2,
+    barPercentage: 0.5,
+    useShadowColorFromDataset: false,
+    propsForDots: { r: "6", strokeWidth: "2", stroke: "#64B5F6" },
+    propsForLabels: { fontSize: 12, fill: "#666" }
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  gradient: {
-    flex: 1,
+    backgroundColor: '#F8F9FA',
   },
   scrollContent: {
-    flexGrow: 1,
     padding: 20,
+    paddingBottom: 40,
   },
   header: {
     alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 30,
+    marginBottom: 20,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#333',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: 'rgba(255,255,255,0.9)',
+    color: '#666',
     textAlign: 'center',
+    lineHeight: 22,
   },
   periodSelector: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 25,
+    backgroundColor: '#E9ECEF',
+    borderRadius: 30,
     padding: 4,
-    marginBottom: 24,
+    marginBottom: 25,
   },
   periodButton: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 21,
-    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 25,
   },
   activePeriodButton: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: '#fff',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   periodText: {
-    fontSize: 14,
+    textAlign: 'center',
+    fontSize: 16,
+    color: '#666',
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.7)',
   },
   activePeriodText: {
-    color: '#fff',
+    color: '#64B5F6',
+  },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  cardTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 20,
   },
   statsContainer: {
-    marginBottom: 30,
-  },
-  statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   statCard: {
-    width: '48%',
-    borderRadius: 16,
-    overflow: 'hidden',
-    elevation: 4,
-  },
-  statGradient: {
-    padding: 20,
-  },
-  statHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    width: '48%',
+  },
+  statIconContainer: {
+      width: 50,
+      height: 50,
+      borderRadius: 25,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 12,
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
   },
   statTitle: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
-    marginLeft: 8,
-  },
-  statValue: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 4,
-  },
-  statSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
-  },
-  section: {
-    marginBottom: 30,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 16,
-  },
-  activityContainer: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 16,
-    padding: 20,
+    color: '#666',
+    marginTop: 2,
   },
   activityItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: '#F0F0F0'
+  },
+  activityIconContainer: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 15,
   },
   activityLabel: {
-    fontSize: 14,
-    color: '#fff',
-    flex: 1,
-    marginLeft: 12,
+      flex: 1,
+      fontSize: 16,
+      color: '#555',
   },
   activityValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
+      fontSize: 16,
+      fontWeight: 'bold',
+      color: '#333',
   },
   insightCard: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
     alignItems: 'flex-start',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 10,
   },
   insightIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+      marginRight: 12,
+      marginTop: 2,
   },
   insightContent: {
     flex: 1,
-    marginLeft: 12,
   },
   insightTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
     marginBottom: 4,
   },
   insightDescription: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
-    lineHeight: 16,
-  },
-  goalsContainer: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 16,
-    padding: 20,
-  },
-  goalItem: {
-    marginBottom: 16,
-  },
-  goalText: {
     fontSize: 14,
-    color: '#fff',
-    marginLeft: 12,
-    marginBottom: 8,
+    color: '#555',
+    lineHeight: 20,
   },
-  goalProgress: {
-    height: 4,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 2,
-    marginLeft: 32,
+  chartPlaceholder: {
+      height: 220,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: '#F8F9FA',
+      borderRadius: 16,
   },
-  goalProgressBar: {
-    height: '100%',
-    backgroundColor: '#4cc9f0',
-    borderRadius: 2,
-  },
+  chartPlaceholderText: {
+      marginTop: 10,
+      fontSize: 14,
+      color: '#ADB5BD'
+  }
 }); 
