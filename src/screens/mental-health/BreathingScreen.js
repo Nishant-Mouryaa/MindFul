@@ -11,50 +11,89 @@ import {
   Alert
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { getAuth } from 'firebase/auth';
+import { db } from '../../config/firebase';
 
+import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 const { width } = Dimensions.get('window');
 
-// We'll do 4 seconds inhale, 7 seconds hold, 8 seconds exhale.
 const BREATHING_STEPS = [
   { label: 'Inhale', duration: 4000 },
-  { label: 'Hold',   duration: 7000 },
+  { label: 'Hold', duration: 7000 },
   { label: 'Exhale', duration: 8000 },
 ];
 
 export default function BreathingScreen() {
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-
-  // Track which of the three phases we're on: 0=Inhale, 1=Hold, 2=Exhale
   const [currentPhaseIndex, setCurrentPhaseIndex] = useState(0);
-
-  // Track total session time
   const [sessionTime, setSessionTime] = useState(0);
-
-  // How many complete cycles of (Inhale → Hold → Exhale) we have done
   const [cycleCount, setCycleCount] = useState(0);
+  const [totalSessions, setTotalSessions] = useState(0);
 
-  // Animated values
   const circleScale = useRef(new Animated.Value(1)).current;
   const circleOpacity = useRef(new Animated.Value(0.7)).current;
-
-  // Timers
   const sessionTimerRef = useRef(null);
   const animationRef = useRef(null);
 
-  // For convenience
   const currentPhase = BREATHING_STEPS[currentPhaseIndex].label;
 
-  // Format mm:ss for the session timer
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  //---------------------------------------------------------------------------
-  // Start the entire session
-  //---------------------------------------------------------------------------
+  // Save session to Firebase
+  const saveSessionToFirebase = async () => {
+    try {
+      const auth = getAuth();
+      const user = auth.currentUser;
+      
+      if (!user) {
+        console.log("User not logged in - session not saved");
+        return;
+      }
+  
+      await addDoc(collection(db, 'activities'), {
+        userId: user.uid,
+        type: 'breathing',
+        cycles: cycleCount,
+        duration: sessionTime,
+        date: new Date()  // Use date instead of timestamp
+      });
+  
+      // Update local session count
+      setTotalSessions(prev => prev + 1);
+    } catch (error) {
+      console.error("Error saving breathing session:", error);
+    }
+  };
+  
+ 
+
+  // Load user's total sessions count
+  useEffect(() => {
+    const loadSessionCount = async () => {
+      try {
+        const auth = getAuth();
+        if (auth.currentUser) {
+          const q = query(
+            collection(db, 'activities'),
+            where('userId', '==', auth.currentUser.uid),
+            where('type', '==', 'breathing')
+          );
+          const querySnapshot = await getDocs(q);
+          setTotalSessions(querySnapshot.size);
+        }
+      } catch (error) {
+        console.error("Error loading session count:", error);
+      }
+    };
+
+    loadSessionCount();
+  }, []);
+
   const startSession = () => {
     setIsSessionActive(true);
     setIsPaused(false);
@@ -62,40 +101,27 @@ export default function BreathingScreen() {
     setCycleCount(0);
     setCurrentPhaseIndex(0);
 
-    // Start counting total session time
     sessionTimerRef.current = setInterval(() => {
       setSessionTime(prev => prev + 1);
     }, 1000);
 
-    // Begin animation at phase index 0 (Inhale)
     runAnimationForPhase(0);
   };
 
-  //---------------------------------------------------------------------------
-  // Animates one phase, then schedules the next
-  //---------------------------------------------------------------------------
   const runAnimationForPhase = (phaseIndex) => {
-    // Double-check if user has stopped or paused in the meantime
     if (!isSessionActive || isPaused) return;
 
-    // Retrieve the properties of the current phase
     const { label, duration } = BREATHING_STEPS[phaseIndex];
+    const nextIndex = (phaseIndex + 1) % BREATHING_STEPS.length;
 
-    // Decide the target scale/opacity
-    let targetScale = 1;
-    let targetOpacity = 0.7;
+    let targetScale = 1.5;
+    let targetOpacity = 1;
 
-    if (label === 'Inhale' || label === 'Hold') {
-      // Inhale & Hold both expand the circle
-      targetScale = 1.5;
-      targetOpacity = 1;
-    } else if (label === 'Exhale') {
-      // Exhale contracts the circle
+    if (label === 'Exhale') {
       targetScale = 1;
       targetOpacity = 0.7;
     }
 
-    // Create and start the parallel animation
     animationRef.current = Animated.parallel([
       Animated.timing(circleScale, {
         toValue: targetScale,
@@ -110,33 +136,22 @@ export default function BreathingScreen() {
     ]);
 
     animationRef.current.start(({ finished }) => {
-      // Only proceed if it finished normally, without being stopped
-      // and if the session is still active and not paused
       if (finished && isSessionActive && !isPaused) {
-        // If we just completed the "Exhale" phase, we completed a cycle
         if (phaseIndex === BREATHING_STEPS.length - 1) {
           setCycleCount(prev => prev + 1);
         }
-        // Move to the next phase in 0,1,2 -> wrap around
-        const nextIndex = (phaseIndex + 1) % BREATHING_STEPS.length;
         setCurrentPhaseIndex(nextIndex);
-        // DO NOT call runAnimationForPhase(nextIndex) here
       }
     });
   };
 
-  //---------------------------------------------------------------------------
-  // Stop the session altogether
-  //---------------------------------------------------------------------------
-  const stopSession = () => {
+  const stopSession = async () => {
     setIsSessionActive(false);
     setIsPaused(false);
     setCurrentPhaseIndex(0);
-    setSessionTime(0);
 
-    // Reset animation
-    if (animationRef.current) {
-      animationRef.current.stop();
+    if (cycleCount > 0) {
+      await saveSessionToFirebase();
     }
 
     Animated.parallel([
@@ -152,41 +167,28 @@ export default function BreathingScreen() {
       }),
     ]).start();
 
-    // Stop the session timer
     if (sessionTimerRef.current) {
       clearInterval(sessionTimerRef.current);
       sessionTimerRef.current = null;
     }
   };
 
-  //---------------------------------------------------------------------------
-  // Pause or resume the session
-  //---------------------------------------------------------------------------
   const togglePause = () => {
     if (!isSessionActive) return;
 
     if (!isPaused) {
-      // Pause: stop timer and animation
       setIsPaused(true);
       if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
       if (animationRef.current) animationRef.current.stop();
     } else {
-      // Resume: re-start the timer and animation from current phase
       setIsPaused(false);
-
-      // Resume the session timer
       sessionTimerRef.current = setInterval(() => {
         setSessionTime(prev => prev + 1);
       }, 1000);
-
-      // Continue animation from currentPhaseIndex
       runAnimationForPhase(currentPhaseIndex);
     }
   };
 
-  //---------------------------------------------------------------------------
-  // Cleanup on unmount
-  //---------------------------------------------------------------------------
   useEffect(() => {
     return () => {
       if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
@@ -194,27 +196,24 @@ export default function BreathingScreen() {
     };
   }, []);
 
-  // Add this useEffect after runAnimationForPhase and before the render
   useEffect(() => {
     if (isSessionActive && !isPaused) {
       runAnimationForPhase(currentPhaseIndex);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPhaseIndex, isSessionActive, isPaused]);
 
-  //---------------------------------------------------------------------------
-  // Render
-  //---------------------------------------------------------------------------
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Breathing Exercise</Text>
-          <Text style={styles.subtitle}>Use the 4-7-8 technique to calm your mind.</Text>
+          <Text style={styles.subtitle}>
+            {totalSessions > 0 
+              ? `You've completed ${totalSessions} sessions` 
+              : 'Start your first session today!'}
+          </Text>
         </View>
 
-        {/* Breathing Visualizer Card */}
         <View style={styles.card}>
           <View style={styles.breathingContainer}>
             <Animated.View
@@ -226,26 +225,16 @@ export default function BreathingScreen() {
                 },
               ]}
             >
-
-              
-
-
-              {/* Phase Label */}
               {isSessionActive && !isPaused ? (
                 <Text style={styles.breathText}>{currentPhase}</Text>
               ) : (
                 <Text style={[styles.breathText, { fontSize: 20 }]}>
-                  {!isSessionActive
-                    ? 'Press Start'
-                    : isPaused
-                    ? 'Paused'
-                    : 'Inhale'}
+                  {!isSessionActive ? 'Press Start' : isPaused ? 'Paused' : 'Inhale'}
                 </Text>
               )}
             </Animated.View>
           </View>
           
-          {/* Session Controls & Info */}
           <View style={styles.controlsContainer}>
             {!isSessionActive ? (
               <TouchableOpacity
@@ -257,7 +246,6 @@ export default function BreathingScreen() {
               </TouchableOpacity>
             ) : (
               <View>
-                {/* Time & Cycle Count */}
                 <View style={styles.sessionStats}>
                   <View style={{ alignItems: 'center' }}>
                     <Text style={styles.sessionStatValue}>
@@ -271,7 +259,6 @@ export default function BreathingScreen() {
                   </View>
                 </View>
 
-                {/* Pause/Resume & Stop */}
                 <View style={styles.sessionControls}>
                   <TouchableOpacity
                     style={[styles.button, styles.pauseButton]}
@@ -295,7 +282,7 @@ export default function BreathingScreen() {
                         'Are you sure you want to end this session?',
                         [
                           { text: 'Cancel', style: 'cancel' },
-                          { text: 'Stop', style: 'destructive', onPress: stopSession },
+                          { text: 'Stop', onPress: stopSession },
                         ]
                       );
                     }}
@@ -311,7 +298,6 @@ export default function BreathingScreen() {
           </View>
         </View>
 
-        {/* Instructions Card */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>How to Practice 4-7-8</Text>
           <View style={styles.instructionItem}>
@@ -328,7 +314,6 @@ export default function BreathingScreen() {
           </View>
         </View>
 
-        {/* Benefits Card */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Benefits of 4-7-8 Breathing</Text>
           <View style={styles.instructionItem}>
@@ -350,7 +335,6 @@ export default function BreathingScreen() {
 }
 
 const styles = StyleSheet.create({
-  // Container
   container: {
     flex: 1,
     backgroundColor: '#F8F9FA',
@@ -358,7 +342,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
   },
-  // Header
   header: {
     alignItems: 'center',
     marginBottom: 30,
@@ -374,7 +357,6 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
   },
-  // Card Container
   card: {
     backgroundColor: '#fff',
     borderRadius: 16,
@@ -386,13 +368,6 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 3,
   },
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 16,
-  },
-  // Breathing Circle
   breathingContainer: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -414,7 +389,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1E88E5',
   },
-  // Controls
   controlsContainer: {
     marginTop: 10,
   },
@@ -447,7 +421,6 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     color: '#fff',
   },
-  // Session Stats
   sessionStats: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -465,7 +438,6 @@ const styles = StyleSheet.create({
   sessionControls: {
     flexDirection: 'row',
   },
-  // Instructions & Benefits
   instructionItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -483,5 +455,10 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     flex: 1,
   },
+  cardTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 16,
+  },
 });
-

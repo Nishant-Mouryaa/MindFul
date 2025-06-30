@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getAuth } from 'firebase/auth';
-import { doc, setDoc, getDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, addDoc, getDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
@@ -162,31 +162,42 @@ export default function JournalScreen() {
       console.error("Error loading entries:", error);
     }
   };
-
   const saveEntry = async () => {
     if (!currentEntry.trim() && !entryTitle.trim()) {
       Alert.alert('Empty Entry', 'Your entry is empty. Please write something or add a title before saving.');
       return;
     }
-
-    const newEntry = {
-      id: Date.now().toString(),
-      title: entryTitle.trim() || 'Untitled Entry',
-      content: currentEntry,
-      mood: mood,
-      date: new Date().toISOString(),
-      userId: getAuth().currentUser?.uid,
-    };
-
+  
     try {
-      const updatedEntries = [newEntry, ...journalEntries];
+      const auth = getAuth();
+      const user = auth.currentUser;
+      
+      if (!user) {
+        Alert.alert('Error', 'You need to be logged in to save entries');
+        return;
+      }
+  
+      const newEntry = {
+        title: entryTitle.trim() || 'Untitled Entry',
+        content: currentEntry,
+        mood: mood,
+        date: new Date(), // This will be converted to Firestore timestamp automatically
+        userId: user.uid,
+      };
+  
+      // Save to local state first
+      const updatedEntries = [{
+        ...newEntry,
+        id: Date.now().toString(),
+        date: new Date().toISOString() // For local storage
+      }, ...journalEntries];
+      
       setJournalEntries(updatedEntries);
       await AsyncStorage.setItem('journalEntries', JSON.stringify(updatedEntries));
       
-      if (getAuth().currentUser) {
-        await setDoc(doc(db, "journals", newEntry.id), newEntry);
-      }
-
+      // Save to Firestore
+      const docRef = await addDoc(collection(db, "journals"), newEntry);
+  
       setCurrentEntry('');
       setEntryTitle('');
       setMood(null);
@@ -197,7 +208,6 @@ export default function JournalScreen() {
       Alert.alert('Error', 'Failed to save your entry. Please try again.');
     }
   };
-
   const deleteEntry = async (entryId) => {
     Alert.alert(
       'Delete Entry',

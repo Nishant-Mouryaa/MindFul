@@ -16,7 +16,7 @@ import { useNavigation } from '@react-navigation/native';
 // Firebase imports
 import { getAuth } from 'firebase/auth';
 import { db } from '../../config/firebase';
-import { collection, addDoc, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, serverTimestamp, doc, updateDoc, increment } from 'firebase/firestore';
 
 export default function CBTScreen() {
   const [thoughtRecord, setThoughtRecord] = useState({
@@ -222,8 +222,13 @@ export default function CBTScreen() {
       
       // Save to Firestore
       const docRef = await addDoc(collection(db, 'cbtRecords'), newRecord);
-      console.log("Document written with ID: ", docRef.id);
-      
+
+      // Increment cbtSessions in user document
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        cbtSessions: increment(1)
+      });
+
       // Update local state
       setSavedRecords(prev => [{
         ...newRecord,
