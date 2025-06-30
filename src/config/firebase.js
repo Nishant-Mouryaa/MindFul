@@ -29,8 +29,11 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const storage = getStorage(app); // Remove the gs:// URL here
 
+const auth = initializeAuth(app, {
+  persistence: getReactNativePersistence(ReactNativeAsyncStorage)
+});
 // Debugging
 console.log('Firebase initialized successfully');
 console.log('Storage bucket:', storage);
 
-export { db, storage, app };
+export { db, storage, app, auth };
