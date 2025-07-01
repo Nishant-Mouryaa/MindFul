@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Power",
-    "slug": "MCQTestApp",
+    "name": "Mindful",
+    "slug": "Mindful",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -28,25 +28,28 @@
       "permissions": [],
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE"
       ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "extra": {
-      "eas": {
-        "projectId": "1d7013c4-37bc-40e7-b605-94e76a7f879e"
-      }
-    },
     "runtimeVersion": {
       "policy": "appVersion"
     },
-    "updates": {
-      "url": "https://u.expo.dev/1d7013c4-37bc-40e7-b605-94e76a7f879e"
-    },
     "plugins": [
       "expo-font"
-    ]
+    ],
+    "owner": "nishant2004",
+    "extra": {
+      "eas": {
+        "projectId": "3316c838-c566-409a-8bb8-f3a85f1c5402"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/3316c838-c566-409a-8bb8-f3a85f1c5402"
+    }
   }
 }
