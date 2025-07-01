@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import {
   View,
@@ -20,11 +21,19 @@ import {
 } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { getAuth, createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
+
+// 1) IMPORT FIRESTORE FUNCTIONS
+import { getFirestore, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+
 import * as Haptics from 'expo-haptics';
 
 const SignupScreen = () => {
   const navigation = useNavigation();
+  
+  // 2) INITIALIZE AUTH AND FIRESTORE REFERENCES
   const auth = getAuth();
+  const db = getFirestore();  // Make sure Firebase is initialized elsewhere in your app
+  
   const passwordInputRef = useRef(null);
   const confirmPasswordInputRef = useRef(null);
 
@@ -68,10 +77,25 @@ const SignupScreen = () => {
 
     setLoading(true);
     try {
+      // 3) CREATE FIREBASE AUTH USER
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      await sendEmailVerification(userCredential.user);
       
+      // 4) SEND VERIFICATION EMAIL
+      await sendEmailVerification(userCredential.user);
+
+      // 5) CREATE USER DOCUMENT IN FIRESTORE
+      // Here we store basic fields: email, role, createdAt, etc.
+      // The doc ID matches the user's UID to ensure easy lookups.
+      await setDoc(doc(db, 'users', userCredential.user.uid), {
+        email: userCredential.user.email,
+        role: 'student', // or any default role you wish
+        createdAt: serverTimestamp(),
+      });
+
+      // 6) Success: Provide user feedback and navigate
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // Example: Navigate to "Onboarding" screen, passing email and uid
       navigation.navigate('Onboarding', { 
         email,
         uid: userCredential.user.uid
@@ -221,6 +245,7 @@ const SignupScreen = () => {
                   </TouchableOpacity>
                 </View>
               </View>
+
             </ScrollView>
           </KeyboardAvoidingView>
         </View>
@@ -299,3 +324,4 @@ const styles = StyleSheet.create({
 });
 
 export default SignupScreen;
+

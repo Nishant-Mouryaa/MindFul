@@ -14,6 +14,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getAuth } from 'firebase/auth';
 import { db } from '../../config/firebase';
 import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { LineChart } from 'react-native-chart-kit';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -159,11 +160,11 @@ export default function ProgressScreen() {
         cbtSessions: cbtSnapshot.size
       };
 
-      // We only count “breathing” from “activities”
+      // We only count "breathing" from "activities"
       activitiesSnapshot.forEach(doc => {
         const data = doc.data();
         if (data.type === 'breathing') activities.breathingSessions++;
-        // Removed the “if (data.type === 'grounding')” line
+        // Removed the "if (data.type === 'grounding')" line
       });
 
       // Calculate stats
@@ -227,7 +228,7 @@ export default function ProgressScreen() {
   };
 
   const calculateStreak = async () => {
-    // Example “streak” logic: checking the “activities” collection for any daily record
+    // Example "streak" logic: checking the "activities" collection for any daily record
     try {
       const auth = getAuth();
       const today = new Date();
@@ -334,6 +335,12 @@ export default function ProgressScreen() {
       </View>
     </View>
   );
+  const getMoodColor = (value) => {
+    if (value <= 3) return '#F44336'; // Red for low mood
+    if (value <= 6) return '#FFC107'; // Yellow for medium mood
+    return '#4CAF50'; // Green for high mood
+  };
+  
 
   const ActivityItem = ({ icon, label, value, color }) => (
     <View style={styles.activityItem}>
@@ -370,6 +377,11 @@ export default function ProgressScreen() {
   }
 
   const currentData = progressData[selectedPeriod] || getDefaultData(selectedPeriod);
+
+  // Build a labels array for the chart based on period
+  const labels = selectedPeriod === 'week'
+    ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    : ['Week1', 'Week2', 'Week3', 'Week4'];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -436,18 +448,100 @@ export default function ProgressScreen() {
           </View>
         </View>
 
-        {/* Mood Over Time */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Mood Over Time</Text>
-          <View style={styles.chartPlaceholder}>
-            <MaterialCommunityIcons name="chart-line" size={50} color="#CED4DA" />
-            <Text style={styles.chartPlaceholderText}>
-              {selectedPeriod === 'week'
-                ? 'Weekly mood chart will be shown here'
-                : 'Monthly mood chart will be shown here'}
-            </Text>
-          </View>
+
+<View style={styles.card}>
+  <Text style={styles.cardTitle}>Mood Over Time</Text>
+  
+  {/* Enhanced Line Chart */}
+  <View style={styles.chartContainer}>
+  <LineChart
+    data={{
+      labels: labels,
+      datasets: [
+        {
+          data: currentData.moodData,
+          color: (opacity = 1) => `rgba(100, 181, 246, ${opacity})`,
+          strokeWidth: 3,
+        },
+        {
+          data: [5, 5, 5, 5, 5, 5, 5], // Baseline for comparison
+          color: (opacity = 1) => `rgba(158, 158, 158, ${opacity})`,
+          strokeWidth: 1,
+          withDots: false,
+        },
+      ],
+    }}
+    width={screenWidth - 60}
+    height={220}
+    yAxisLabel=""
+    yAxisSuffix=""
+    yAxisInterval={1}
+    fromZero={false}
+    segments={5}
+    chartConfig={{
+      backgroundColor: '#fff',
+      backgroundGradientFrom: '#fff',
+      backgroundGradientTo: '#fff',
+      decimalPlaces: 1,
+      color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+      labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+      style: {
+        borderRadius: 16,
+      },
+      propsForDots: {
+        r: '5',
+        strokeWidth: '2',
+        stroke: '#fff',
+      },
+      propsForBackgroundLines: {
+        strokeDasharray: '', // solid lines
+        stroke: '#E0E0E0',
+        strokeWidth: 1,
+      },
+      propsForLabels: {
+        fontSize: 12,
+      },
+    }}
+    bezier
+    style={{
+      marginVertical: 8,
+      borderRadius: 16,
+    }}
+    decorator={() => (
+      <View style={styles.chartLegend}>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendColor, { backgroundColor: '#64B5F6' }]} />
+          <Text style={styles.legendText}>Your Mood</Text>
         </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendColor, { backgroundColor: '#9E9E9E' }]} />
+          <Text style={styles.legendText}>Baseline</Text>
+        </View>
+      </View>
+    )}
+  />
+  </View>
+
+  {/* Mood Range Indicator */}
+  <View style={styles.moodRangeContainer}>
+    <Text style={styles.moodRangeText}>Low</Text>
+    <View style={styles.moodRangeBar}>
+      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+        <View 
+          key={num} 
+          style={[
+            styles.moodRangeSegment, 
+            { 
+              backgroundColor: getMoodColor(num),
+              opacity: num <= currentData.moodAverage ? 1 : 0.2
+            }
+          ]}
+        />
+      ))}
+    </View>
+    <Text style={styles.moodRangeText}>High</Text>
+  </View>
+</View>
 
         {/* Activity Breakdown */}
         <View style={styles.card}>
@@ -565,20 +659,27 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 20,
+    padding: 20, // Keep some padding inside the card
     marginBottom: 20,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-  },
-  cardTitle: {
+    },
+    cardTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 20,
-  },
+    },
+    chartContainer: {
+    alignItems: 'center', // Center the chart horizontally
+    },
+    chartStyle: {
+    borderRadius: 16,
+    marginVertical: 8,
+    },
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -605,18 +706,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginTop: 2,
-  },
-  chartPlaceholder: {
-    height: 220,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F8F9FA',
-    borderRadius: 16,
-  },
-  chartPlaceholderText: {
-    marginTop: 10,
-    fontSize: 14,
-    color: '#ADB5BD',
   },
   activityItem: {
     flexDirection: 'row',
@@ -667,5 +756,48 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#555',
     lineHeight: 20,
+  },
+  chartLegend: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 10,
+  },
+  legendColor: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 5,
+  },
+  legendText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  moodRangeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 15,
+    paddingHorizontal: 10,
+  },
+  moodRangeBar: {
+    flex: 1,
+    height: 10,
+    flexDirection: 'row',
+    marginHorizontal: 10,
+    borderRadius: 5,
+    overflow: 'hidden',
+  },
+  moodRangeSegment: {
+    flex: 1,
+    height: '100%',
+  },
+  moodRangeText: {
+    fontSize: 12,
+    color: '#666',
   },
 });

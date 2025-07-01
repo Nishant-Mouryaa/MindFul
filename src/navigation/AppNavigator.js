@@ -11,11 +11,6 @@ import LoginScreen from '../screens/auth/LoginScreen';
 import SignupScreen from '../screens/auth/SignupScreen';
 import BottomTabNavigator from './BottomTabNavigator';
 import HomeScreen from '../screens/home/HomeScreen';
-import WorkoutScreen from '../screens/workout/WorkoutScreen';
-import LogWorkoutScreen from '../screens/workout/LogWorkoutScreen';
-import ProgressScreen from '../screens/progress/ProgressScreen';
-import TipsScreen from '../screens/tips/TipsScreen';
-import AcademyScreen from '../screens/academy/AcademyScreen';
 import BreathingScreen from '../screens/mental-health/BreathingScreen';
 import CBTScreen from '../screens/mental-health/CBTScreen';
 import GroundingScreen from '../screens/mental-health/GroundingScreen';
@@ -38,11 +33,6 @@ const MainNavigator = () => (
   <AppStack.Navigator screenOptions={{ headerShown: false }}>
     <AppStack.Screen name="Main" component={BottomTabNavigator} />
     <AppStack.Screen name="Home" component={HomeScreen} />
-    <AppStack.Screen name="Workout" component={WorkoutScreen} />
-    <AppStack.Screen name="LogWorkout" component={LogWorkoutScreen} />
-    <AppStack.Screen name="Progress" component={ProgressScreen} />
-    <AppStack.Screen name="Tips" component={TipsScreen} />
-    <AppStack.Screen name="Academy" component={AcademyScreen} />
     <AppStack.Screen name="Breathing" component={BreathingScreen} />
     <AppStack.Screen name="CBT" component={CBTScreen} />
     <AppStack.Screen name="Grounding" component={GroundingScreen} />

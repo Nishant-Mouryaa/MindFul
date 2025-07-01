@@ -20,7 +20,7 @@ import HomeScreen from '../screens/home/HomeScreen';
 import JournalScreen from '../screens/mental-health/JournalScreen';
 import ToolsScreen from '../screens/mental-health/ToolsScreen';
 import ProgressScreen from '../screens/mental-health/ProgressScreen';
-import AdminPanel from '../screens/AdminPanel';
+
 
 import { Palette } from '../theme/colors';
 
