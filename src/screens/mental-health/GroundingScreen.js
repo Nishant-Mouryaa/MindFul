@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
@@ -20,6 +21,15 @@ import { getAuth } from 'firebase/auth';
 import { db } from '../../config/firebase';
 import { collection, addDoc, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
 
+// Import theme constants
+import {
+  Palette,
+  spacing,
+  typography,
+  shadows,
+  borderRadius,
+} from '../../theme/colors'; // Adjust the import path as needed
+
 export default function GroundingScreen() {
   // Exercise state
   const [currentStep, setCurrentStep] = useState(0);
@@ -40,18 +50,16 @@ export default function GroundingScreen() {
   const slideAnim = useRef(new Animated.Value(30)).current;
 
   const groundingSteps = [
-    { title: '5 Things You Can See',    count: 5, icon: 'eye-outline',      color: '#4DB6AC' },
-    { title: '4 Things You Can Touch',  count: 4, icon: 'gesture-tap',      color: '#64B5F6' },
-    { title: '3 Things You Can Hear',   count: 3, icon: 'ear-hearing',      color: '#FFB74D' },
-    { title: '2 Things You Can Smell',  count: 2, icon: 'scent',            color: '#BA68C8' },
-    { title: '1 Thing You Can Taste',   count: 1, icon: 'food-apple-outline', color: '#E57373' },
+    { title: '5 Things You Can See',    count: 5, icon: 'eye-outline',        color: Palette.primary },
+    { title: '4 Things You Can Touch',  count: 4, icon: 'gesture-tap',        color: Palette.secondaryBlue },
+    { title: '3 Things You Can Hear',   count: 3, icon: 'ear-hearing',        color: Palette.secondaryOrange },
+    { title: '2 Things You Can Smell',  count: 2, icon: 'scent',              color: Palette.secondaryPink },
+    { title: '1 Thing You Can Taste',   count: 1, icon: 'food-apple-outline', color: Palette.secondaryRed },
   ];
 
   // ========================
   // Data Management
   // ========================
-
-  // Load last session on mount
   useEffect(() => {
     loadLastSession();
     fetchPastSessions();
@@ -72,7 +80,6 @@ export default function GroundingScreen() {
   const fetchPastSessions = async () => {
     const auth = getAuth();
     if (!auth.currentUser) return;
-
     try {
       const q = query(
         collection(db, 'groundingSessions'),
@@ -94,15 +101,11 @@ export default function GroundingScreen() {
     const sessionData = {
       responses,
       moodBefore,
-      moodAfter: moodAfter || moodBefore, // Default to before if not set
+      moodAfter: moodAfter || moodBefore,
       timestamp: new Date()
     };
-
     // 1. Save locally
-    await AsyncStorage.setItem(
-      'lastGroundingSession',
-      JSON.stringify(sessionData)
-    );
+    await AsyncStorage.setItem('lastGroundingSession', JSON.stringify(sessionData));
 
     // 2. Save to Firestore if logged in
     const auth = getAuth();
@@ -122,26 +125,23 @@ export default function GroundingScreen() {
   // ========================
   // Exercise Flow
   // ========================
-
   const startGrounding = () => {
-    // Reset all exercise-related states
-    setResponses({ 5: [], 4: [], 3: [], 2: [], 1: [] }); // Clear previous responses
-    setInputValue(''); // Clear any input text
-    setCurrentStep(0); // Reset to first step
-    setMoodAfter(null); // Reset after-mood
-    setIsActive(true); // Start exercise
+    setResponses({ 5: [], 4: [], 3: [], 2: [], 1: [] });
+    setInputValue('');
+    setCurrentStep(0);
+    setMoodAfter(null);
+    setIsActive(true);
   };
 
   const finishGrounding = async () => {
     setIsActive(false);
     await saveSession();
-    fetchPastSessions(); // Refresh history
+    fetchPastSessions();
   };
 
   // ========================
   // UI Components
   // ========================
-
   const renderMoodSelector = (currentMood, setMood) => (
     <View style={styles.moodContainer}>
       {[1, 2, 3, 4, 5].map(num => (
@@ -150,7 +150,7 @@ export default function GroundingScreen() {
           onPress={() => setMood(num)}
           style={[
             styles.moodButton,
-            currentMood === num && { backgroundColor: '#E3F2FD' }
+            currentMood === num && styles.moodButtonSelected
           ]}
         >
           <Text style={styles.moodText}>{num}</Text>
@@ -168,11 +168,9 @@ export default function GroundingScreen() {
           style={styles.closeButton}
           onPress={() => setShowHistory(false)}
         >
-          <MaterialCommunityIcons name="close" size={24} color="#666" />
+          <MaterialCommunityIcons name="close" size={24} color={Palette.textLight} />
         </TouchableOpacity>
-
         <Text style={styles.modalTitle}>Past Sessions</Text>
-        
         {pastSessions.length === 0 ? (
           <Text style={styles.emptyText}>No past sessions found</Text>
         ) : (
@@ -194,9 +192,7 @@ export default function GroundingScreen() {
     </Modal>
   );
 
-  //---------------------------------------------------------------------------
   // Animation Helpers
-  //---------------------------------------------------------------------------
   const runAnimation = () => {
     fadeAnim.setValue(0);
     slideAnim.setValue(30);
@@ -220,30 +216,25 @@ export default function GroundingScreen() {
     }
   }, [isActive, currentStep]);
 
-  //---------------------------------------------------------------------------
   // Step Navigation
-  //---------------------------------------------------------------------------
   const nextStep = () => {
     if (currentStep < groundingSteps.length - 1) {
-      setCurrentStep((prev) => prev + 1);
+      setCurrentStep(prev => prev + 1);
     } else {
       finishGrounding();
     }
   };
-
   const prevStep = () => {
     if (currentStep > 0) {
-      setCurrentStep((prev) => prev - 1);
+      setCurrentStep(prev => prev - 1);
     }
   };
 
-  //---------------------------------------------------------------------------
   // Response Handlers
-  //---------------------------------------------------------------------------
   const addResponse = () => {
     if (inputValue.trim() === '') return;
     const count = groundingSteps[currentStep].count;
-    setResponses((prev) => ({
+    setResponses(prev => ({
       ...prev,
       [count]: [...prev[count], inputValue.trim()],
     }));
@@ -252,45 +243,44 @@ export default function GroundingScreen() {
 
   const removeResponse = (index) => {
     const count = groundingSteps[currentStep].count;
-    setResponses((prev) => ({
+    setResponses(prev => ({
       ...prev,
       [count]: prev[count].filter((_, i) => i !== index),
     }));
   };
 
-  //---------------------------------------------------------------------------
   // Rendering Logic
-  //---------------------------------------------------------------------------
   const currentStepData = groundingSteps[currentStep];
   const currentResponses = responses[currentStepData.count];
   const isStepComplete = currentResponses.length >= currentStepData.count;
 
   const renderStartScreen = () => (
     <View style={styles.startContainer}>
-      <View style={[styles.card, styles.introCard]}>
-        <MaterialCommunityIcons name="earth" size={60} color="#64B5F6" style={{ marginBottom: 15 }}/>
+      <View style={[styles.card, styles.introCard, shadows.medium]}>
+        <MaterialCommunityIcons name="earth" size={60} color={Palette.secondaryBlue} style={{ marginBottom: spacing.md }}/>
         <Text style={styles.title}>5-4-3-2-1 Grounding</Text>
         <Text style={styles.subtitle}>
           A simple technique to anchor you in the present moment during times of anxiety or distress.
         </Text>
         <TouchableOpacity style={styles.startButton} onPress={startGrounding}>
           <Text style={styles.startButtonText}>Begin Exercise</Text>
-          <MaterialCommunityIcons name="arrow-right" size={20} color="#fff" />
+          <MaterialCommunityIcons name="arrow-right" size={20} color={Palette.white} />
         </TouchableOpacity>
       </View>
 
-      {/* Conditionally show summary if there is any data */}
       {Object.values(responses).some(r => r.length > 0) && renderSummary()}
     </View>
   );
 
   const renderSummary = () => (
-    <View style={styles.card}>
+    <View style={[styles.card, shadows.low]}>
       <Text style={styles.cardTitle}>Last Session Summary</Text>
       {groundingSteps.map(step => (
         responses[step.count].length > 0 && (
           <View key={step.count} style={styles.summarySection}>
-            <Text style={[styles.summaryCategory, {color: step.color}]}>{step.title}</Text>
+            <Text style={[styles.summaryCategory, { color: step.color }]}>
+              {step.title}
+            </Text>
             {responses[step.count].map((item, index) => (
               <Text key={index} style={styles.summaryItem}>• {item}</Text>
             ))}
@@ -304,26 +294,37 @@ export default function GroundingScreen() {
     <Animated.View style={{opacity: fadeAnim, transform: [{translateY: slideAnim}]}}>
       {/* Progress bar */}
       <View style={styles.progressContainer}>
-        {groundingSteps.map((step, index) => (
-          <View
-            key={index}
-            style={[
-              styles.progressSegment,
-              index < currentStep && { backgroundColor: groundingSteps[index].color, opacity: 0.5 },
-              index === currentStep && { backgroundColor: groundingSteps[index].color },
-            ]}
-          />
-        ))}
+        {groundingSteps.map((step, index) => {
+          const isCompleted = index < currentStep;
+          const isCurrent = index === currentStep;
+          return (
+            <View
+              key={index}
+              style={[
+                styles.progressSegment,
+                isCompleted && { backgroundColor: step.color, opacity: 0.5 },
+                isCurrent && { backgroundColor: step.color },
+              ]}
+            />
+          );
+        })}
       </View>
 
-      {/* Main Card for the current step */}
-      <View style={[styles.card, {borderColor: currentStepData.color}]}>
+      {/* Main Card for current step */}
+      <View style={[
+        styles.card,
+        shadows.medium,
+        { borderColor: currentStepData.color }
+      ]}>
         <View style={styles.stepHeader}>
-          <View style={[styles.stepIconContainer, {backgroundColor: currentStepData.color + '20'}]}>
-            <MaterialCommunityIcons 
-              name={currentStepData.icon} 
-              size={28} 
-              color={currentStepData.color} 
+          <View style={[
+            styles.stepIconContainer, 
+            { backgroundColor: currentStepData.color + '20' }
+          ]}>
+            <MaterialCommunityIcons
+              name={currentStepData.icon}
+              size={28}
+              color={currentStepData.color}
             />
           </View>
           <View>
@@ -334,34 +335,39 @@ export default function GroundingScreen() {
           </View>
         </View>
         
-        {/* Responses for the current step */}
+        {/* Responses */}
         <View style={styles.responseList}>
           {currentResponses.map((item, index) => (
             <View key={index} style={styles.responseChip}>
               <Text style={styles.responseChipText}>{item}</Text>
               <TouchableOpacity onPress={() => removeResponse(index)}>
-                <MaterialCommunityIcons name="close-circle" size={18} color={currentStepData.color} />
+                <MaterialCommunityIcons 
+                  name="close-circle"
+                  size={18}
+                  color={currentStepData.color}
+                />
               </TouchableOpacity>
             </View>
           ))}
         </View>
 
-        {/* Input for new response (only if step isn't complete) */}
+        {/* Input (only if step isn't complete) */}
         {!isStepComplete && (
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.textInput}
-              placeholder={`Name something you can ${currentStepData.title.split(' ').pop().toLowerCase()}...`}
+              placeholder={`Name something you can ${
+                currentStepData.title.split(' ').pop().toLowerCase()}...`}
               value={inputValue}
               onChangeText={setInputValue}
               onSubmitEditing={addResponse}
               returnKeyType="done"
             />
             <TouchableOpacity
-              style={[styles.addButton, {backgroundColor: currentStepData.color}]}
+              style={[styles.addButton, { backgroundColor: currentStepData.color }]}
               onPress={addResponse}
             >
-              <MaterialCommunityIcons name="plus" size={24} color="#fff" />
+              <MaterialCommunityIcons name="plus" size={24} color={Palette.white} />
             </TouchableOpacity>
           </View>
         )}
@@ -369,23 +375,23 @@ export default function GroundingScreen() {
 
       {/* Navigation Buttons */}
       <View style={styles.navigationContainer}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[
             styles.navButton,
             styles.prevButton,
-            {opacity: currentStep === 0 ? 0.5 : 1}
+            { opacity: currentStep === 0 ? 0.5 : 1 }
           ]}
           onPress={prevStep}
           disabled={currentStep === 0}
         >
-          <MaterialCommunityIcons name="arrow-left" size={20} color="#555" />
+          <MaterialCommunityIcons name="arrow-left" size={20} color={Palette.textMedium} />
         </TouchableOpacity>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[
             styles.navButton,
             styles.nextButton,
-            {backgroundColor: currentStepData.color},
+            { backgroundColor: currentStepData.color },
             !isStepComplete && styles.disabledButton
           ]}
           onPress={nextStep}
@@ -397,16 +403,13 @@ export default function GroundingScreen() {
           <MaterialCommunityIcons
             name={currentStep < groundingSteps.length - 1 ? 'arrow-right' : 'check'}
             size={20}
-            color="#fff"
+            color={Palette.white}
           />
         </TouchableOpacity>
       </View>
     </Animated.View>
   );
 
-  //---------------------------------------------------------------------------
-  // Render
-  //---------------------------------------------------------------------------
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -417,14 +420,14 @@ export default function GroundingScreen() {
   );
 }
 
+// Updated styles referencing the theme constants
 const styles = StyleSheet.create({
-  // Container
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: Palette.background,
   },
   scrollContent: {
-    padding: 20,
+    padding: spacing.lg,
     flexGrow: 1,
   },
 
@@ -435,82 +438,76 @@ const styles = StyleSheet.create({
   },
   introCard: {
     alignItems: 'center',
-    padding: 30,
-    marginBottom: 20,
+    padding: spacing.xxl,
+    marginBottom: spacing.lg,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-    textAlign: 'center'
+    ...typography.h1,
+    color: Palette.textDark,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
-    color: '#666',
+    ...typography.body,
+    color: Palette.textLight,
+    lineHeight: 22, // or typography.body.lineHeight
+    marginBottom: spacing.lg,
     textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 25,
   },
   startButton: {
     flexDirection: 'row',
-    backgroundColor: '#64B5F6',
-    paddingVertical: 14,
-    paddingHorizontal: 30,
-    borderRadius: 30,
+    backgroundColor: Palette.secondaryBlue,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.full,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: spacing.sm,
   },
   startButtonText: {
-    color: '#fff',
-    fontSize: 18,
+    ...typography.body,
+    color: Palette.white,
     fontWeight: 'bold',
-    marginRight: 10,
+    marginRight: spacing.xs,
+    fontSize: 18, // Larger text for the button
   },
 
-  // Card
+  // Shadow card
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 25,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 2,
+    backgroundColor: Palette.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: Palette.border,
   },
   cardTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 16,
+    ...typography.h2,
+    color: Palette.textDark,
+    marginBottom: spacing.md,
   },
 
   // Summary
   summarySection: {
-    marginBottom: 15,
+    marginBottom: spacing.md,
   },
   summaryCategory: {
-    fontSize: 16,
+    ...typography.body,
     fontWeight: 'bold',
-    marginBottom: 5,
+    marginBottom: spacing.xs,
   },
   summaryItem: {
-    fontSize: 15,
-    color: '#555',
-    marginLeft: 10,
+    ...typography.small,
+    color: Palette.textMedium,
+    marginLeft: spacing.xs,
   },
 
   // Progress indicator
   progressContainer: {
     flexDirection: 'row',
     height: 8,
-    borderRadius: 4,
-    backgroundColor: '#E0E0E0',
-    marginBottom: 25,
+    borderRadius: borderRadius.sm,
+    backgroundColor: Palette.border,
+    marginBottom: spacing.lg,
     overflow: 'hidden',
   },
   progressSegment: {
@@ -522,68 +519,68 @@ const styles = StyleSheet.create({
   stepHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.md,
   },
   stepIconContainer: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: borderRadius.full,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: spacing.sm,
   },
   stepTitle: {
-    fontSize: 22,
+    ...typography.h3,
     fontWeight: 'bold',
-    color: '#333',
+    color: Palette.textDark,
   },
   stepCount: {
-    fontSize: 14,
-    color: '#999',
+    ...typography.small,
+    color: Palette.textLight,
   },
 
-  // Responses list
+  // Responses
   responseList: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: 10,
+    marginBottom: spacing.xs,
   },
   responseChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0F0F0',
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginRight: 8,
-    marginBottom: 8,
+    backgroundColor: Palette.background,
+    borderRadius: borderRadius.full,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    marginRight: spacing.sm,
+    marginBottom: spacing.sm,
   },
   responseChipText: {
-    fontSize: 15,
-    color: '#333',
-    marginRight: 6,
+    ...typography.small,
+    color: Palette.textDark,
+    marginRight: spacing.xs,
   },
 
   // Input
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: spacing.sm,
   },
   textInput: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 10,
-    padding: 15,
-    fontSize: 16,
-    color: '#333',
+    backgroundColor: Palette.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    fontSize: typography.body.fontSize,
+    color: Palette.textDark,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-    marginRight: 10,
+    borderColor: Palette.border,
+    marginRight: spacing.sm,
   },
   addButton: {
-    padding: 15,
-    borderRadius: 10,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
   },
 
   // Navigation
@@ -595,87 +592,91 @@ const styles = StyleSheet.create({
   navButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 25,
+    padding: spacing.md,
+    borderRadius: borderRadius.full,
   },
   prevButton: {
-    backgroundColor: '#fff',
+    backgroundColor: Palette.white,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: Palette.border,
   },
   nextButton: {
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.xl,
   },
   disabledButton: {
     backgroundColor: '#BDBDBD',
   },
   navButtonText: {
-    color: '#fff',
-    fontSize: 16,
+    ...typography.body,
     fontWeight: 'bold',
-    marginHorizontal: 8,
+    color: Palette.white,
+    marginHorizontal: spacing.xs,
   },
 
   // Mood Selector
   moodContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginVertical: 20,
+    marginVertical: spacing.lg,
   },
   moodButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: borderRadius.full,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#BBDEFB'
+    borderColor: '#BBDEFB', // Or switch to a palette color
+  },
+  moodButtonSelected: {
+    backgroundColor: '#E3F2FD', // Or switch to a palette color
   },
   moodText: {
+    ...typography.body,
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1976D2'
+    color: '#1976D2', // Or switch to a palette color
   },
   moodLabel: {
-    fontSize: 10,
-    color: '#666',
-    marginTop: 4
+    ...typography.small,
+    color: Palette.textLight,
+    marginTop: 4,
   },
   
   // History Modal
   modalContainer: {
     flex: 1,
-    backgroundColor: '#fff',
-    padding: 20
+    backgroundColor: Palette.white,
+    padding: spacing.lg,
   },
   modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center'
+    ...typography.h2,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
   },
   sessionCard: {
-    backgroundColor: '#F5F5F5',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 10
+    backgroundColor: Palette.background,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
   },
   sessionDate: {
+    ...typography.body,
     fontWeight: 'bold',
-    marginBottom: 5
+    marginBottom: spacing.xs,
   },
   moodComparison: {
     flexDirection: 'row',
-    justifyContent: 'space-between'
+    justifyContent: 'space-between',
   },
   closeButton: {
     alignSelf: 'flex-end',
-    padding: 10
+    padding: spacing.sm,
   },
   emptyText: {
+    ...typography.body,
+    color: Palette.textLight,
     textAlign: 'center',
-    color: '#666',
-    marginTop: 20
-  }
+    marginTop: spacing.md,
+  },
 });
-

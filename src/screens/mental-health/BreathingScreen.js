@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
@@ -13,8 +14,16 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getAuth } from 'firebase/auth';
 import { db } from '../../config/firebase';
+import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 
-import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import {
+  Palette,
+  spacing,
+  typography,
+  shadows,
+  borderRadius,
+} from '../../theme/colors'; // Adjust path as needed
+
 const { width } = Dimensions.get('window');
 
 const BREATHING_STEPS = [
@@ -60,17 +69,15 @@ export default function BreathingScreen() {
         type: 'breathing',
         cycles: cycleCount,
         duration: sessionTime,
-        date: new Date()  // Use date instead of timestamp
+        date: new Date(), // Use date instead of timestamp
       });
   
       // Update local session count
-      setTotalSessions(prev => prev + 1);
+      setTotalSessions((prev) => prev + 1);
     } catch (error) {
       console.error("Error saving breathing session:", error);
     }
   };
-  
- 
 
   // Load user's total sessions count
   useEffect(() => {
@@ -90,7 +97,6 @@ export default function BreathingScreen() {
         console.error("Error loading session count:", error);
       }
     };
-
     loadSessionCount();
   }, []);
 
@@ -102,7 +108,7 @@ export default function BreathingScreen() {
     setCurrentPhaseIndex(0);
 
     sessionTimerRef.current = setInterval(() => {
-      setSessionTime(prev => prev + 1);
+      setSessionTime((prev) => prev + 1);
     }, 1000);
 
     runAnimationForPhase(0);
@@ -138,7 +144,7 @@ export default function BreathingScreen() {
     animationRef.current.start(({ finished }) => {
       if (finished && isSessionActive && !isPaused) {
         if (phaseIndex === BREATHING_STEPS.length - 1) {
-          setCycleCount(prev => prev + 1);
+          setCycleCount((prev) => prev + 1);
         }
         setCurrentPhaseIndex(nextIndex);
       }
@@ -183,7 +189,7 @@ export default function BreathingScreen() {
     } else {
       setIsPaused(false);
       sessionTimerRef.current = setInterval(() => {
-        setSessionTime(prev => prev + 1);
+        setSessionTime((prev) => prev + 1);
       }, 1000);
       runAnimationForPhase(currentPhaseIndex);
     }
@@ -214,7 +220,7 @@ export default function BreathingScreen() {
           </Text>
         </View>
 
-        <View style={styles.card}>
+        <View style={[styles.card, shadows.medium]}>
           <View style={styles.breathingContainer}>
             <Animated.View
               style={[
@@ -241,7 +247,7 @@ export default function BreathingScreen() {
                 style={[styles.button, styles.startButton]}
                 onPress={startSession}
               >
-                <MaterialCommunityIcons name="play" size={24} color="#fff" />
+                <MaterialCommunityIcons name="play" size={24} color={Palette.white} />
                 <Text style={styles.buttonText}>Start</Text>
               </TouchableOpacity>
             ) : (
@@ -267,7 +273,7 @@ export default function BreathingScreen() {
                     <MaterialCommunityIcons
                       name={isPaused ? 'play' : 'pause'}
                       size={24}
-                      color="#fff"
+                      color={Palette.white}
                     />
                     <Text style={styles.buttonText}>
                       {isPaused ? 'Resume' : 'Pause'}
@@ -287,8 +293,8 @@ export default function BreathingScreen() {
                       );
                     }}
                   >
-                    <MaterialCommunityIcons name="stop" size={24} color="#E57373" />
-                    <Text style={[styles.buttonText, { color: '#E57373' }]}>
+                    <MaterialCommunityIcons name="stop" size={24} color={Palette.secondaryRed} />
+                    <Text style={[styles.buttonText, { color: Palette.secondaryRed }]}>
                       Stop
                     </Text>
                   </TouchableOpacity>
@@ -298,34 +304,34 @@ export default function BreathingScreen() {
           </View>
         </View>
 
-        <View style={styles.card}>
+        <View style={[styles.card, shadows.medium]}>
           <Text style={styles.cardTitle}>How to Practice 4-7-8</Text>
           <View style={styles.instructionItem}>
-            <MaterialCommunityIcons name="numeric-1-circle" size={24} color="#4DB6AC" />
+            <MaterialCommunityIcons name="numeric-1-circle" size={24} color={Palette.primary} />
             <Text style={styles.instructionText}>Inhale through your nose for 4 seconds.</Text>
           </View>
           <View style={styles.instructionItem}>
-            <MaterialCommunityIcons name="numeric-2-circle" size={24} color="#4DB6AC" />
+            <MaterialCommunityIcons name="numeric-2-circle" size={24} color={Palette.primary} />
             <Text style={styles.instructionText}>Hold your breath for 7 seconds.</Text>
           </View>
           <View style={styles.instructionItem}>
-            <MaterialCommunityIcons name="numeric-3-circle" size={24} color="#4DB6AC" />
+            <MaterialCommunityIcons name="numeric-3-circle" size={24} color={Palette.primary} />
             <Text style={styles.instructionText}>Exhale completely through your mouth for 8 seconds.</Text>
           </View>
         </View>
 
-        <View style={styles.card}>
+        <View style={[styles.card, shadows.medium]}>
           <Text style={styles.cardTitle}>Benefits of 4-7-8 Breathing</Text>
           <View style={styles.instructionItem}>
-            <MaterialCommunityIcons name="check-circle" size={20} color="#64B5F6" />
+            <MaterialCommunityIcons name="check-circle" size={20} color={Palette.secondaryBlue} />
             <Text style={styles.benefitText}>Reduces anxiety and stress</Text>
           </View>
           <View style={styles.instructionItem}>
-            <MaterialCommunityIcons name="check-circle" size={20} color="#64B5F6" />
+            <MaterialCommunityIcons name="check-circle" size={20} color={Palette.secondaryBlue} />
             <Text style={styles.benefitText}>Helps you fall asleep faster</Text>
           </View>
           <View style={styles.instructionItem}>
-            <MaterialCommunityIcons name="check-circle" size={20} color="#64B5F6" />
+            <MaterialCommunityIcons name="check-circle" size={20} color={Palette.secondaryBlue} />
             <Text style={styles.benefitText}>Improves focus and mindfulness</Text>
           </View>
         </View>
@@ -337,47 +343,42 @@ export default function BreathingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: Palette.background,
   },
   scrollContent: {
-    padding: 20,
+    padding: spacing.lg,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: spacing.xl,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
+    ...typography.h1,
+    color: Palette.textDark,
+    marginBottom: spacing.sm,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#666',
+    ...typography.body,
+    color: Palette.textLight,
     textAlign: 'center',
   },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
+    backgroundColor: Palette.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
   },
   breathingContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     height: 220,
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   breathingCircle: {
     width: 180,
     height: 180,
     borderRadius: 90,
+    // You can keep your custom color or swap these for your theme colors
     backgroundColor: '#E3F2FD',
     justifyContent: 'center',
     alignItems: 'center',
@@ -387,53 +388,53 @@ const styles = StyleSheet.create({
   breathText: {
     fontSize: 24,
     fontWeight: '600',
+    // Adjust color to match your theme if desired
     color: '#1E88E5',
   },
   controlsContainer: {
-    marginTop: 10,
+    marginTop: spacing.sm,
   },
   button: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 25,
-    marginBottom: 10,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.full,
+    marginBottom: spacing.sm,
   },
   startButton: {
-    backgroundColor: '#4DB6AC',
+    backgroundColor: Palette.primary,
   },
   pauseButton: {
-    backgroundColor: '#90CAF9',
+    backgroundColor: '#90CAF9', // Or Palette.secondaryBlue
     flex: 1,
-    marginRight: 8,
+    marginRight: spacing.sm,
   },
   stopButton: {
-    backgroundColor: '#fff',
+    backgroundColor: Palette.white,
     borderWidth: 1,
-    borderColor: '#E57373',
+    borderColor: Palette.secondaryRed,
     flex: 1,
-    marginLeft: 8,
+    marginLeft: spacing.sm,
   },
   buttonText: {
-    fontSize: 18,
+    ...typography.body,
     fontWeight: 'bold',
-    marginLeft: 10,
-    color: '#fff',
+    marginLeft: spacing.xs,
+    color: Palette.white,
   },
   sessionStats: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginBottom: 10,
+    marginBottom: spacing.sm,
   },
   sessionStatValue: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
+    ...typography.h3,
+    color: Palette.textDark,
   },
   sessionStatLabel: {
-    fontSize: 14,
-    color: '#777',
+    ...typography.small,
+    color: Palette.textMedium,
   },
   sessionControls: {
     flexDirection: 'row',
@@ -441,24 +442,23 @@ const styles = StyleSheet.create({
   instructionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
   instructionText: {
-    fontSize: 16,
-    color: '#555',
-    marginLeft: 12,
+    ...typography.body,
+    color: Palette.textMedium,
+    marginLeft: spacing.sm,
     flex: 1,
   },
   benefitText: {
-    fontSize: 16,
-    color: '#555',
-    marginLeft: 12,
+    ...typography.body,
+    color: Palette.textMedium,
+    marginLeft: spacing.sm,
     flex: 1,
   },
   cardTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 16,
+    ...typography.h2,
+    color: Palette.textDark,
+    marginBottom: spacing.md,
   },
 });

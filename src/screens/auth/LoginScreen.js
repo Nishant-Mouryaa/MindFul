@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import {
   View,
@@ -10,20 +11,29 @@ import {
   StatusBar,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView
+  SafeAreaView,
 } from 'react-native';
 import {
   TextInput,
   Button,
   Text,
   HelperText,
-  ActivityIndicator
+  ActivityIndicator,
 } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { db } from '../../config/firebase'; // Adjust path if needed
 import * as Haptics from 'expo-haptics';
+
+// Import your theme constants
+import {
+  Palette,
+  spacing,
+  typography,
+  shadows,
+  borderRadius,
+} from '../../theme/colors'; // Adjust path if needed
 
 const LoginScreen = () => {
   const navigation = useNavigation();
@@ -101,7 +111,7 @@ const LoginScreen = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+      <StatusBar barStyle="dark-content" backgroundColor={Palette.background} />
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
         <View style={styles.container}>
           <KeyboardAvoidingView
@@ -127,12 +137,12 @@ const LoginScreen = () => {
                   autoCapitalize="none"
                   keyboardType="email-address"
                   style={styles.input}
-                  outlineColor="#CBD5E1"
-                  activeOutlineColor="#5B6ABF"
+                  outlineColor={Palette.border}
+                  activeOutlineColor={Palette.primary}
                   returnKeyType="next"
                   onSubmitEditing={() => passwordInputRef.current?.focus()}
-                  left={<TextInput.Icon icon="email" color="#94A3B8" />}
-                  theme={{ roundness: 10 }}
+                  left={<TextInput.Icon icon="email" color={Palette.textLight} />}
+                  theme={{ roundness: borderRadius.sm }}
                 />
 
                 <TextInput
@@ -142,16 +152,16 @@ const LoginScreen = () => {
                   onChangeText={setPassword}
                   secureTextEntry={secureTextEntry}
                   style={styles.input}
-                  outlineColor="#CBD5E1"
-                  activeOutlineColor="#5B6ABF"
+                  outlineColor={Palette.border}
+                  activeOutlineColor={Palette.primary}
                   returnKeyType="done"
                   ref={passwordInputRef}
-                  left={<TextInput.Icon icon="lock" color="#94A3B8" />}
-                  theme={{ roundness: 10 }}
+                  left={<TextInput.Icon icon="lock" color={Palette.textLight} />}
+                  theme={{ roundness: borderRadius.sm }}
                   right={
                     <TextInput.Icon
                       icon={secureTextEntry ? 'eye-off' : 'eye'}
-                      color="#94A3B8"
+                      color={Palette.textLight}
                       onPress={() => {
                         setSecureTextEntry(!secureTextEntry);
                         Haptics.selectionAsync();
@@ -181,12 +191,12 @@ const LoginScreen = () => {
                   mode="contained"
                   onPress={handleSignIn}
                   style={styles.button}
-                  buttonColor="#5B6ABF"
+                  buttonColor={Palette.primary}
                   labelStyle={styles.buttonLabel}
                   disabled={loading}
                 >
                   {loading ? (
-                    <ActivityIndicator color="#fff" animating={true} />
+                    <ActivityIndicator color={Palette.white} animating={true} />
                   ) : (
                     'Sign In'
                   )}
@@ -212,15 +222,16 @@ const LoginScreen = () => {
   );
 };
 
+// Updated styles referencing theme constants
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: Palette.background,
   },
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 24,
+    backgroundColor: Palette.background,
+    paddingHorizontal: spacing.lg,
   },
   keyboardView: {
     flex: 1,
@@ -230,62 +241,64 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   header: {
-    marginBottom: 40,
+    marginBottom: spacing.xl,
     alignItems: 'center',
   },
   title: {
-    fontSize: 28,
-    fontWeight: '600',
-    color: '#1E293B',
-    marginBottom: 8,
-    fontFamily: 'Inter-SemiBold',
+    ...typography.h1,
+    color: Palette.textDark,
+    marginBottom: spacing.sm,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#64748B',
+    ...typography.body,
+    color: Palette.textLight,
     textAlign: 'center',
   },
   form: {
     width: '100%',
   },
   input: {
-    marginBottom: 16,
-    backgroundColor: '#FFFFFF',
+    marginBottom: spacing.md,
+    backgroundColor: Palette.white,
   },
   forgotPassword: {
     alignSelf: 'flex-end',
-    marginBottom: 24,
+    marginBottom: spacing.lg,
   },
   forgotPasswordText: {
-    color: '#5B6ABF',
-    fontSize: 14,
+    ...typography.small,
+    color: Palette.primary,
   },
   errorText: {
-    marginBottom: 16,
-    color: '#EF4444',
+    ...typography.caption,
+    color: Palette.secondaryRed,
+    marginBottom: spacing.md,
   },
   button: {
-    borderRadius: 10,
-    paddingVertical: 8,
-    marginBottom: 24,
+    borderRadius: borderRadius.sm,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.xl,
     elevation: 0,
   },
   buttonLabel: {
-    fontSize: 16,
+    ...typography.body,
     fontWeight: '500',
+    color: Palette.white,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 16,
+    marginTop: spacing.md,
   },
   footerText: {
-    color: '#64748B',
-    marginRight: 4,
+    ...typography.body,
+    color: Palette.textLight,
+    marginRight: spacing.xs,
   },
   footerLink: {
-    color: '#5B6ABF',
+    ...typography.body,
     fontWeight: '500',
+    color: Palette.primary,
   },
 });
 

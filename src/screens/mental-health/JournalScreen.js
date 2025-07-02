@@ -23,6 +23,7 @@ import * as SecureStore from 'expo-secure-store';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 import * as FileSystem from 'expo-file-system';
+import { Palette, spacing, typography, shadows, borderRadius } from '../../theme/colors';
 
 export default function JournalScreen() {
   const [journalEntries, setJournalEntries] = useState([]);
@@ -50,13 +51,13 @@ export default function JournalScreen() {
 
   const moodOptions = [
     { label: 'Great', value: 'great', icon: 'emoticon-excited-outline', color: '#58D68D' },
-    { label: 'Good', value: 'good', icon: 'emoticon-happy-outline', color: '#81C784' },
-    { label: 'Neutral', value: 'neutral', icon: 'emoticon-neutral-outline', color: '#AAB7B8' },
-    { label: 'Down', value: 'down', icon: 'emoticon-sad-outline', color: '#7FB3D5' },
-    { label: 'Sad', value: 'sad', icon: 'emoticon-frown-outline', color: '#5DADE2' },
-    { label: 'Anxious', value: 'anxious', icon: 'emoticon-confused-outline', color: '#F1948A' },
-    { label: 'Angry', value: 'angry', icon: 'emoticon-angry-outline', color: '#EC7063' },
-    { label: 'Tired', value: 'tired', icon: 'emoticon-dead-outline', color: '#BB8FCE' },
+    { label: 'Good', value: 'good', icon: 'emoticon-happy-outline', color: Palette.primary },
+    { label: 'Neutral', value: 'neutral', icon: 'emoticon-neutral-outline', color: Palette.textLight },
+    { label: 'Down', value: 'down', icon: 'emoticon-sad-outline', color: Palette.secondaryBlue },
+    { label: 'Sad', value: 'sad', icon: 'emoticon-frown-outline', color: Palette.secondaryBlue },
+    { label: 'Anxious', value: 'anxious', icon: 'emoticon-confused-outline', color: Palette.secondaryOrange },
+    { label: 'Angry', value: 'angry', icon: 'emoticon-angry-outline', color: Palette.secondaryRed },
+    { label: 'Tired', value: 'tired', icon: 'emoticon-dead-outline', color: Palette.secondaryPurple },
   ];
 
   const prompts = [
@@ -485,7 +486,7 @@ Shared from Mindful Journal App
             onPress={() => setShowNewEntry(true)}
             disabled={journalLocked}
           >
-            <MaterialCommunityIcons name="plus" size={24} color="#fff" />
+            <MaterialCommunityIcons name="plus" size={24} color={Palette.white} />
             <Text style={styles.newEntryHeaderButtonText}>New</Text>
           </TouchableOpacity>
         </View>
@@ -501,19 +502,19 @@ Shared from Mindful Journal App
                 setPasswordModalVisible(true);
               }}
             >
-              <MaterialCommunityIcons name="lock-open" size={20} color="#fff" />
+              <MaterialCommunityIcons name="lock-open" size={20} color={Palette.white} />
               <Text style={styles.privacyButtonText}>Set Password</Text>
             </TouchableOpacity>
           ) : (
             <>
               <TouchableOpacity 
-                style={[styles.privacyButton, { marginRight: 10 }]}
+                style={[styles.privacyButton, { marginRight: spacing.sm }]}
                 onPress={() => {
                   setPasswordModalType('CHANGE_PASSWORD');
                   setPasswordModalVisible(true);
                 }}
               >
-                <MaterialCommunityIcons name="lock-reset" size={20} color="#fff" />
+                <MaterialCommunityIcons name="lock-reset" size={20} color={Palette.white} />
                 <Text style={styles.privacyButtonText}>Change Password</Text>
               </TouchableOpacity>
 
@@ -521,7 +522,7 @@ Shared from Mindful Journal App
                 style={styles.privacyButton}
                 onPress={() => removeJournalPassword()}
               >
-                <MaterialCommunityIcons name="lock" size={20} color="#fff" />
+                <MaterialCommunityIcons name="lock" size={20} color={Palette.white} />
                 <Text style={styles.privacyButtonText}>Remove Password</Text>
               </TouchableOpacity>
             </>
@@ -534,7 +535,7 @@ Shared from Mindful Journal App
         <ScrollView contentContainerStyle={styles.scrollContent}>
           {journalEntries.length === 0 ? (
             <View style={styles.emptyState}>
-              <MaterialCommunityIcons name="notebook-edit-outline" size={80} color="#CED4DA" />
+              <MaterialCommunityIcons name="notebook-edit-outline" size={80} color={Palette.border} />
               <Text style={styles.emptyStateTitle}>Your journal is empty</Text>
               <Text style={styles.emptyStateText}>
                 Tap the "New" button above to start writing
@@ -562,7 +563,7 @@ Shared from Mindful Journal App
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>New Entry</Text>
               <TouchableOpacity onPress={() => setShowNewEntry(false)}>
-                <MaterialCommunityIcons name="close" size={28} color="#999" />
+                <MaterialCommunityIcons name="close" size={28} color={Palette.textLight} />
               </TouchableOpacity>
             </View>
 
@@ -576,7 +577,7 @@ Shared from Mindful Journal App
               />
 
               <View style={styles.promptContainer}>
-                <MaterialCommunityIcons name="lightbulb-on-outline" size={24} color="#FFB74D" />
+                <MaterialCommunityIcons name="lightbulb-on-outline" size={24} color={Palette.secondaryOrange} />
                 <Text style={styles.promptText}>{currentPrompt}</Text>
               </View>
 
@@ -630,7 +631,7 @@ Shared from Mindful Journal App
               {selectedEntry?.title}
             </Text>
             <TouchableOpacity onPress={() => setSelectedEntry(null)}>
-              <MaterialCommunityIcons name="close" size={28} color="#999" />
+              <MaterialCommunityIcons name="close" size={28} color={Palette.textLight} />
             </TouchableOpacity>
           </View>
           
@@ -666,10 +667,10 @@ Shared from Mindful Journal App
               disabled={isLoading}
             >
               {isLoading ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={Palette.white} />
               ) : (
                 <>
-                  <MaterialCommunityIcons name="share-variant" size={20} color="#fff" />
+                  <MaterialCommunityIcons name="share-variant" size={20} color={Palette.white} />
                   <Text style={styles.shareButtonText}>Share as Text</Text>
                 </>
               )}
@@ -680,10 +681,10 @@ Shared from Mindful Journal App
               disabled={isLoading}
             >
               {isLoading ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={Palette.white} />
               ) : (
                 <>
-                  <MaterialCommunityIcons name="file-pdf-box" size={20} color="#fff" />
+                  <MaterialCommunityIcons name="file-pdf-box" size={20} color={Palette.white} />
                   <Text style={styles.shareButtonText}>Export as PDF</Text>
                 </>
               )}
@@ -696,7 +697,7 @@ Shared from Mindful Journal App
               style={styles.deleteButton} 
               onPress={() => deleteEntry(selectedEntry?.id)}
             >
-              <MaterialCommunityIcons name="trash-can-outline" size={22} color="#E57373" />
+              <MaterialCommunityIcons name="trash-can-outline" size={22} color={Palette.secondaryRed} />
               <Text style={styles.deleteButtonText}>Delete</Text>
             </TouchableOpacity>
           </View>
@@ -779,7 +780,7 @@ Shared from Mindful Journal App
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: Palette.background,
   },
   lockOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -789,116 +790,112 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   lockOverlayText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginVertical: 20,
+    fontSize: typography.h1.fontSize,
+    fontWeight: typography.h1.fontWeight,
+    color: Palette.white,
+    marginVertical: spacing.lg,
   },
   lockOverlayButton: {
-    backgroundColor: '#64B5F6',
-    borderRadius: 25,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    backgroundColor: Palette.secondaryBlue,
+    borderRadius: borderRadius.full,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
   },
   lockOverlayButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+    color: Palette.white,
+    fontSize: typography.h3.fontSize,
+    fontWeight: typography.h3.fontWeight,
   },
 
   header: {
-    padding: 20,
-    paddingBottom: 15,
+    padding: spacing.lg,
+    paddingBottom: spacing.sm,
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: typography.h1.fontSize,
+    fontWeight: typography.h1.fontWeight,
+    color: Palette.textDark,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#666',
-    marginTop: 4,
+    fontSize: typography.body.fontSize,
+    color: Palette.textLight,
+    marginTop: spacing.xs,
   },
   scrollContent: {
-    padding: 20,
-    paddingTop: 10,
+    padding: spacing.lg,
+    paddingTop: spacing.sm,
     paddingBottom: 100,
   },
   newEntryHeaderButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#64B5F6',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    elevation: 2,
+    backgroundColor: Palette.secondaryBlue,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    ...shadows.low,
   },
   newEntryHeaderButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 6,
+    color: Palette.white,
+    fontSize: typography.body.fontSize,
+    fontWeight: typography.h3.fontWeight,
+    marginLeft: spacing.xs,
   },
   privacyContainer: {
-    marginTop: 15,
+    marginTop: spacing.sm,
     flexDirection: 'row',
     justifyContent: 'flex-start',
   },
   privacyButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#7986CB',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
+    backgroundColor: Palette.secondaryPurple,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
   },
   privacyButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
-    marginLeft: 8,
+    color: Palette.white,
+    fontSize: typography.caption.fontSize,
+    fontWeight: typography.h3.fontWeight,
+    marginLeft: spacing.sm,
   },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+    padding: spacing.xl,
     marginTop: 50,
   },
   emptyStateTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#555',
-    marginTop: 20,
-    marginBottom: 10,
+    fontSize: typography.h2.fontSize,
+    fontWeight: typography.h2.fontWeight,
+    color: Palette.textMedium,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
   },
   emptyStateText: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: typography.body.fontSize,
+    color: Palette.textLight,
     textAlign: 'center',
-    lineHeight: 22,
-    marginTop: 8,
+    lineHeight: typography.body.lineHeight,
+    marginTop: spacing.sm,
   },
   entriesContainer: {},
   entryCard: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 15,
+    backgroundColor: Palette.card,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
     alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    ...shadows.low,
   },
   entryHeader: {
     flexDirection: 'row',
@@ -912,98 +909,98 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   dateBadge: {
-    borderRadius: 10,
-    padding: 10,
+    borderRadius: borderRadius.sm,
+    padding: spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 15,
+    marginRight: spacing.sm,
     height: 60,
     width: 60,
   },
   dateDay: {
     fontSize: 22,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontWeight: typography.h2.fontWeight,
+    color: Palette.white,
   },
   dateMonth: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginTop: 2,
+    fontSize: typography.small.fontSize,
+    fontWeight: typography.h2.fontWeight,
+    color: Palette.white,
+    marginTop: spacing.xs,
   },
   entryContent: {
     flex: 1,
   },
   entryTitle: {
-    fontSize: 17,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: typography.body.fontSize,
+    fontWeight: typography.h2.fontWeight,
+    color: Palette.textDark,
   },
   entrySnippet: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
+    fontSize: typography.caption.fontSize,
+    color: Palette.textLight,
+    lineHeight: typography.caption.lineHeight,
   },
   moodIcon: {
     marginLeft: 10,
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: Palette.background,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    padding: spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: Palette.border,
   },
   modalTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: typography.h2.fontSize,
+    fontWeight: typography.h2.fontWeight,
+    color: Palette.textDark,
     flex: 1,
     textAlign: 'center',
-    marginHorizontal: 10,
+    marginHorizontal: spacing.sm,
   },
   modalContent: {
-    padding: 20,
+    padding: spacing.lg,
   },
   titleInput: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    paddingBottom: 10,
-    marginBottom: 20,
+    fontWeight: typography.h1.fontWeight,
+    color: Palette.textDark,
+    paddingBottom: spacing.sm,
+    marginBottom: spacing.lg,
   },
   promptContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF8E1',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 20,
+    backgroundColor: Palette.secondaryOrange + '20',
+    borderRadius: borderRadius.sm,
+    padding: spacing.sm,
+    marginBottom: spacing.lg,
   },
   promptText: {
     flex: 1,
-    fontSize: 15,
-    color: '#6D4C41',
-    marginLeft: 10,
+    fontSize: typography.body.fontSize,
+    color: Palette.textDark,
+    marginLeft: spacing.sm,
     fontStyle: 'italic',
   },
   contentInput: {
-    fontSize: 17,
-    color: '#333',
+    fontSize: typography.body.fontSize,
+    color: Palette.textDark,
     minHeight: 200,
-    lineHeight: 24,
+    lineHeight: typography.body.lineHeight,
   },
   moodLabel: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginTop: 20,
-    marginBottom: 15,
+    fontSize: typography.h3.fontSize,
+    fontWeight: typography.h3.fontWeight,
+    color: Palette.textDark,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
   },
   moodContainer: {
     flexDirection: 'row',
@@ -1012,110 +1009,110 @@ const styles = StyleSheet.create({
   },
   moodButton: {
     alignItems: 'center',
-    padding: 10,
-    borderRadius: 10,
+    padding: spacing.sm,
+    borderRadius: borderRadius.sm,
     borderWidth: 2,
     borderColor: 'transparent',
     width: '22%',
-    marginBottom: 10,
+    marginBottom: spacing.sm,
   },
   privacyToggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    backgroundColor: '#F5F5F5',
-    borderRadius: 10,
-    marginTop: 20,
+    padding: spacing.sm,
+    backgroundColor: Palette.background,
+    borderRadius: borderRadius.sm,
+    marginTop: spacing.lg,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: Palette.border,
   },
   privacyToggleText: {
-    fontSize: 16,
-    color: '#333',
-    marginLeft: 10,
+    fontSize: typography.body.fontSize,
+    color: Palette.textDark,
+    marginLeft: spacing.sm,
   },
   modalFooter: {
-    padding: 20,
+    padding: spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
+    borderTopColor: Palette.border,
     flexDirection: 'row',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
   },
   saveButton: {
-    backgroundColor: '#64B5F6',
-    padding: 15,
-    borderRadius: 30,
+    backgroundColor: Palette.secondaryBlue,
+    padding: spacing.sm,
+    borderRadius: borderRadius.full,
     alignItems: 'center',
     flex: 1,
-    marginHorizontal: 5,
+    marginHorizontal: spacing.xs,
   },
   saveButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+    color: Palette.white,
+    fontSize: typography.h3.fontSize,
+    fontWeight: typography.h3.fontWeight,
   },
   shareButton: {
-    backgroundColor: '#7986CB',
-    padding: 15,
-    borderRadius: 30,
+    backgroundColor: Palette.secondaryPurple,
+    padding: spacing.sm,
+    borderRadius: borderRadius.full,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
     flex: 1,
   },
   shareButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 8,
+    color: Palette.white,
+    fontSize: typography.body.fontSize,
+    fontWeight: typography.h2.fontWeight,
+    marginLeft: spacing.sm,
   },
   deleteButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFEBEE',
-    padding: 15,
-    borderRadius: 30,
+    backgroundColor: Palette.secondaryRed + '20',
+    padding: spacing.sm,
+    borderRadius: borderRadius.full,
     flex: 1,
-    marginHorizontal: 5,
+    marginHorizontal: spacing.xs,
   },
   deleteButtonText: {
-    color: '#E57373',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 8,
+    color: Palette.secondaryRed,
+    fontSize: typography.body.fontSize,
+    fontWeight: typography.h2.fontWeight,
+    marginLeft: spacing.sm,
   },
   viewHeader: {
-    paddingBottom: 15,
-    marginBottom: 15,
+    paddingBottom: spacing.sm,
+    marginBottom: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: Palette.border,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   viewDate: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: typography.caption.fontSize,
+    color: Palette.textLight,
     flex: 1,
   },
   viewMoodBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 20,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
+    borderRadius: borderRadius.full,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
   },
   viewMoodText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginLeft: 5,
+    fontSize: typography.caption.fontSize,
+    fontWeight: typography.h2.fontWeight,
+    marginLeft: spacing.xs,
   },
   viewContent: {
-    fontSize: 17,
-    color: '#333',
-    lineHeight: 26,
+    fontSize: typography.body.fontSize,
+    color: Palette.textDark,
+    lineHeight: typography.body.lineHeight,
   },
   passwordModalContainer: {
     flex: 1,
@@ -1124,61 +1121,61 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   passwordModalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
+    backgroundColor: Palette.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     width: '85%',
     maxWidth: 400,
   },
   passwordModalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 20,
+    fontSize: typography.h3.fontSize,
+    fontWeight: typography.h3.fontWeight,
+    color: Palette.textDark,
+    marginBottom: spacing.lg,
     textAlign: 'center',
   },
   passwordInput: {
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 14,
-    fontSize: 16,
-    marginBottom: 15,
+    borderColor: Palette.border,
+    borderRadius: borderRadius.sm,
+    padding: spacing.sm,
+    fontSize: typography.body.fontSize,
+    marginBottom: spacing.sm,
   },
   passwordNote: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: typography.caption.fontSize,
+    color: Palette.textLight,
     textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 20,
+    marginBottom: spacing.lg,
+    lineHeight: typography.caption.lineHeight,
   },
   passwordButtonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   cancelButton: {
-    backgroundColor: '#E0E0E0',
-    padding: 12,
-    borderRadius: 8,
+    backgroundColor: Palette.border,
+    padding: spacing.sm,
+    borderRadius: borderRadius.sm,
     flex: 1,
-    marginRight: 10,
+    marginRight: spacing.sm,
     alignItems: 'center',
   },
   cancelButtonText: {
-    color: '#333',
-    fontWeight: 'bold',
+    color: Palette.textDark,
+    fontWeight: typography.h2.fontWeight,
   },
   confirmButton: {
-    backgroundColor: '#64B5F6',
-    padding: 12,
-    borderRadius: 8,
+    backgroundColor: Palette.secondaryBlue,
+    padding: spacing.sm,
+    borderRadius: borderRadius.sm,
     flex: 1,
-    marginLeft: 10,
+    marginLeft: spacing.sm,
     alignItems: 'center',
   },
   confirmButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
+    color: Palette.white,
+    fontWeight: typography.h2.fontWeight,
   },
 });
 

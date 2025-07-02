@@ -10,30 +10,35 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  StatusBar
+  StatusBar,
 } from 'react-native';
 import {
   TextInput,
   Button,
   Text,
   HelperText,
-  ActivityIndicator
+  ActivityIndicator,
 } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { getAuth, createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 
-// 1) IMPORT FIRESTORE FUNCTIONS
 import { getFirestore, doc, setDoc, serverTimestamp } from 'firebase/firestore';
-
 import * as Haptics from 'expo-haptics';
+
+// Import your theme constants (adjust path as necessary)
+import {
+  Palette,
+  spacing,
+  typography,
+  borderRadius,
+  shadows,
+} from '../../theme/colors'; // or wherever your theme file is located
 
 const SignupScreen = () => {
   const navigation = useNavigation();
-  
-  // 2) INITIALIZE AUTH AND FIRESTORE REFERENCES
   const auth = getAuth();
-  const db = getFirestore();  // Make sure Firebase is initialized elsewhere in your app
-  
+  const db = getFirestore();  
+
   const passwordInputRef = useRef(null);
   const confirmPasswordInputRef = useRef(null);
 
@@ -77,30 +82,25 @@ const SignupScreen = () => {
 
     setLoading(true);
     try {
-      // 3) CREATE FIREBASE AUTH USER
+      // Create Firebase Auth user
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      
-      // 4) SEND VERIFICATION EMAIL
+
+      // Send verification email
       await sendEmailVerification(userCredential.user);
 
-      // 5) CREATE USER DOCUMENT IN FIRESTORE
-      // Here we store basic fields: email, role, createdAt, etc.
-      // The doc ID matches the user's UID to ensure easy lookups.
+      // Create user document in Firestore
       await setDoc(doc(db, 'users', userCredential.user.uid), {
         email: userCredential.user.email,
-        role: 'student', // or any default role you wish
+        role: 'student', // or any default role
         createdAt: serverTimestamp(),
       });
 
-      // 6) Success: Provide user feedback and navigate
+      // Success haptic and navigation
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      // Example: Navigate to "Onboarding" screen, passing email and uid
-      navigation.navigate('Onboarding', { 
+      navigation.navigate('Onboarding', {
         email,
-        uid: userCredential.user.uid
+        uid: userCredential.user.uid,
       });
-      
     } catch (err) {
       let errorMessage = 'Signup failed. Please try again.';
       switch (err.code) {
@@ -126,7 +126,7 @@ const SignupScreen = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+      <StatusBar barStyle="dark-content" backgroundColor={Palette.background} />
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
         <View style={styles.container}>
           <KeyboardAvoidingView
@@ -152,12 +152,12 @@ const SignupScreen = () => {
                   autoCapitalize="none"
                   keyboardType="email-address"
                   style={styles.input}
-                  outlineColor="#CBD5E1"
-                  activeOutlineColor="#5B6ABF"
+                  outlineColor={Palette.border}
+                  activeOutlineColor={Palette.primary}
                   returnKeyType="next"
                   onSubmitEditing={() => passwordInputRef.current?.focus()}
-                  left={<TextInput.Icon icon="email" color="#94A3B8" />}
-                  theme={{ roundness: 10 }}
+                  left={<TextInput.Icon icon="email" color={Palette.textLight} />}
+                  theme={{ roundness: borderRadius.sm }}
                 />
 
                 <TextInput
@@ -167,16 +167,16 @@ const SignupScreen = () => {
                   onChangeText={setPassword}
                   secureTextEntry={secureTextEntry}
                   style={styles.input}
-                  outlineColor="#CBD5E1"
-                  activeOutlineColor="#5B6ABF"
+                  outlineColor={Palette.border}
+                  activeOutlineColor={Palette.primary}
                   returnKeyType="next"
                   ref={passwordInputRef}
-                  left={<TextInput.Icon icon="lock" color="#94A3B8" />}
-                  theme={{ roundness: 10 }}
+                  left={<TextInput.Icon icon="lock" color={Palette.textLight} />}
+                  theme={{ roundness: borderRadius.sm }}
                   right={
                     <TextInput.Icon
                       icon={secureTextEntry ? 'eye-off' : 'eye'}
-                      color="#94A3B8"
+                      color={Palette.textLight}
                       onPress={() => {
                         setSecureTextEntry(!secureTextEntry);
                         Haptics.selectionAsync();
@@ -193,16 +193,16 @@ const SignupScreen = () => {
                   onChangeText={setConfirmPassword}
                   secureTextEntry={secureConfirmTextEntry}
                   style={styles.input}
-                  outlineColor="#CBD5E1"
-                  activeOutlineColor="#5B6ABF"
+                  outlineColor={Palette.border}
+                  activeOutlineColor={Palette.primary}
                   returnKeyType="done"
                   ref={confirmPasswordInputRef}
-                  left={<TextInput.Icon icon="lock" color="#94A3B8" />}
-                  theme={{ roundness: 10 }}
+                  left={<TextInput.Icon icon="lock" color={Palette.textLight} />}
+                  theme={{ roundness: borderRadius.sm }}
                   right={
                     <TextInput.Icon
                       icon={secureConfirmTextEntry ? 'eye-off' : 'eye'}
-                      color="#94A3B8"
+                      color={Palette.textLight}
                       onPress={() => {
                         setSecureConfirmTextEntry(!secureConfirmTextEntry);
                         Haptics.selectionAsync();
@@ -222,12 +222,12 @@ const SignupScreen = () => {
                   mode="contained"
                   onPress={handleSignUp}
                   style={styles.button}
-                  buttonColor="#5B6ABF"
+                  buttonColor={Palette.primary}
                   labelStyle={styles.buttonLabel}
                   disabled={loading}
                 >
                   {loading ? (
-                    <ActivityIndicator color="#fff" animating={true} />
+                    <ActivityIndicator color={Palette.white} animating={true} />
                   ) : (
                     'Create Account'
                   )}
@@ -245,7 +245,6 @@ const SignupScreen = () => {
                   </TouchableOpacity>
                 </View>
               </View>
-
             </ScrollView>
           </KeyboardAvoidingView>
         </View>
@@ -254,15 +253,16 @@ const SignupScreen = () => {
   );
 };
 
+// Updated styles referencing theme constants
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: Palette.background,
   },
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 24,
+    backgroundColor: Palette.background,
+    paddingHorizontal: spacing.lg,
   },
   keyboardView: {
     flex: 1,
@@ -272,56 +272,57 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   header: {
-    marginBottom: 40,
+    marginBottom: spacing.xl,
     alignItems: 'center',
   },
   title: {
-    fontSize: 28,
-    fontWeight: '600',
-    color: '#1E293B',
-    marginBottom: 8,
-    fontFamily: 'Inter-SemiBold',
+    ...typography.h1,
+    color: Palette.textDark,
+    marginBottom: spacing.sm,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#64748B',
+    ...typography.body,
+    color: Palette.textLight,
     textAlign: 'center',
   },
   form: {
     width: '100%',
   },
   input: {
-    marginBottom: 16,
-    backgroundColor: '#FFFFFF',
+    marginBottom: spacing.md,
+    backgroundColor: Palette.white,
   },
   errorText: {
-    marginBottom: 16,
-    color: '#EF4444',
+    ...typography.caption,
+    color: Palette.secondaryRed,
+    marginBottom: spacing.md,
   },
   button: {
-    borderRadius: 10,
-    paddingVertical: 8,
-    marginBottom: 24,
-    elevation: 0,
+    borderRadius: borderRadius.sm,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.xl,
+    elevation: 0, // remove if you want shadows
   },
   buttonLabel: {
-    fontSize: 16,
+    ...typography.body,
     fontWeight: '500',
+    color: Palette.white,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 16,
+    marginTop: spacing.md,
   },
   footerText: {
-    color: '#64748B',
-    marginRight: 4,
+    ...typography.body,
+    color: Palette.textLight,
+    marginRight: spacing.xs,
   },
   footerLink: {
-    color: '#5B6ABF',
+    ...typography.body,
     fontWeight: '500',
+    color: Palette.primary,
   },
 });
 
 export default SignupScreen;
-

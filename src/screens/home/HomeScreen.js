@@ -28,6 +28,7 @@ import {
   getDoc,
   addDoc
 } from 'firebase/firestore';
+import { Palette, spacing, typography, shadows, borderRadius } from '../../theme/colors';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -57,11 +58,11 @@ export default function HomeScreen() {
 
   // Mood options with icons
   const moodOptions = [
-    { name: 'Happy',   icon: 'emoticon-happy-outline', color: '#F8BBD0', value: 10 },
-    { name: 'Calm',    icon: 'yin-yang',               color: '#D1C4E9', value: 7 },
-    { name: 'Relax',   icon: 'meditation',             color: '#FFE0B2', value: 5 },
-    { name: 'Focused', icon: 'brain',                  color: '#B2DFDB', value: 8 },
-    { name: 'Tired',   icon: 'sleep',                  color: '#CFD8DC', value: 2 },
+    { name: 'Happy',   icon: 'emoticon-happy-outline', color: Palette.secondaryPink, value: 10 },
+    { name: 'Calm',    icon: 'yin-yang',               color: Palette.secondaryPurple, value: 7 },
+    { name: 'Relax',   icon: 'meditation',             color: Palette.secondaryOrange, value: 5 },
+    { name: 'Focused', icon: 'brain',                  color: Palette.primaryLight, value: 8 },
+    { name: 'Tired',   icon: 'sleep',                  color: Palette.border, value: 2 },
   ];
 
   // On mount
@@ -154,7 +155,7 @@ export default function HomeScreen() {
       );
       setMoodHistoryData({
         labels: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
-        datasets: [{ data: averagedData, color: () => '#4DB6AC' }]
+        datasets: [{ data: averagedData, color: () => Palette.primary }]
       });
 
       // 5) Calculate user streak 
@@ -432,7 +433,7 @@ export default function HomeScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4DB6AC" />
+        <ActivityIndicator size="large" color={Palette.primary} />
         <Text style={styles.loadingText}>Loading your data...</Text>
       </View>
     );
@@ -447,8 +448,8 @@ export default function HomeScreen() {
         <RefreshControl
           refreshing={loading}
           onRefresh={fetchUserData}
-          colors={['#4DB6AC']}
-          tintColor="#4DB6AC"
+          colors={[Palette.primary]}
+          tintColor={Palette.primary}
         />
       }
     >
@@ -471,14 +472,14 @@ export default function HomeScreen() {
             style={styles.logoutButton}
             onPress={handleLogout}
           >
-            <MaterialCommunityIcons name="logout" size={24} color="#616161" />
+            <MaterialCommunityIcons name="logout" size={24} color={Palette.textLight} />
           </TouchableOpacity>
 
           <TouchableOpacity 
             style={styles.profileButton}
             onPress={() => navigation.navigate('Profile')}
           >
-            <MaterialCommunityIcons name="account-circle" size={36} color="#616161" />
+            <MaterialCommunityIcons name="account-circle" size={36} color={Palette.textLight} />
           </TouchableOpacity>
         </View>
 
@@ -513,7 +514,7 @@ export default function HomeScreen() {
 
         {/* Mood Tracking Section */}
         <LinearGradient
-          colors={['#F1F9F6', '#D0ECEA']}
+          colors={[Palette.background, Palette.primaryLight]}
           style={styles.moodSection}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -542,7 +543,7 @@ export default function HomeScreen() {
               onPress={() => navigation.navigate('Journal', { mood: currentMood })}
             >
               <LinearGradient 
-                colors={['#80CBC4', '#4DB6AC']} 
+                colors={[Palette.primaryLight, Palette.primary]} 
                 style={styles.journalGradient}
               >
                 <Text style={styles.journalButtonText}>
@@ -592,7 +593,7 @@ export default function HomeScreen() {
         {/* Daily Mental Health Tip */}
         <View style={styles.tipCard}>
           <View style={styles.tipHeader}>
-            <MaterialCommunityIcons name="lightbulb-on" size={24} color="#00897B" />
+            <MaterialCommunityIcons name="lightbulb-on" size={24} color={Palette.primaryDark} />
             <Text style={styles.tipTitle}>Today's Wellness Tip</Text>
           </View>
           <Text style={styles.tipContent}>
@@ -605,9 +606,9 @@ export default function HomeScreen() {
           style={styles.emergencyCard}
           onPress={() => navigation.navigate('EmergencyResources')}
         >
-          <MaterialCommunityIcons name="lifebuoy" size={24} color="#fff" />
+          <MaterialCommunityIcons name="lifebuoy" size={24} color={Palette.white} />
           <Text style={styles.emergencyText}>Need Immediate Help?</Text>
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#fff" />
+          <MaterialCommunityIcons name="chevron-right" size={24} color={Palette.white} />
         </TouchableOpacity>
       </Animated.View>
     </ScrollView>
@@ -621,169 +622,166 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fdfdfd',
+    backgroundColor: Palette.background,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 24,
+    paddingBottom: spacing.lg,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: Platform.OS === 'ios' ? 50 : 24,
-    paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingTop: Platform.OS === 'ios' ? 50 : spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
   },
   greeting: {
-    fontSize: 16,
-    color: '#616161',
-    fontWeight: '400',
-    marginBottom: 2,
+    fontSize: typography.body.fontSize,
+    color: Palette.textLight,
+    fontWeight: typography.body.fontWeight,
+    marginBottom: spacing.xs,
   },
   headerTitle: {
     fontSize: 30,
     fontWeight: '800',
-    color: '#00897B',
+    color: Palette.primaryDark,
     letterSpacing: 1,
   },
   logoutButton: {
-    padding: 8,
+    padding: spacing.sm,
   },
   profileButton: {
-    padding: 8,
+    padding: spacing.sm,
   },
   quickActions: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginHorizontal: 20,
-    marginBottom: 20,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
   },
   quickAction: {
     alignItems: 'center',
     width: '30%',
   },
   quickActionIcon: {
-    backgroundColor: '#4DB6AC',
+    backgroundColor: Palette.primary,
     width: 50,
     height: 50,
-    borderRadius: 25,
+    borderRadius: borderRadius.full,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   quickActionLabel: {
-    fontSize: 12,
-    color: '#616161',
+    fontSize: typography.small.fontSize,
+    color: Palette.textLight,
     textAlign: 'center',
   },
   checkinReminder: {
-    backgroundColor: '#E3F2FD',
-    borderRadius: 16,
-    padding: 16,
-    marginHorizontal: 20,
-    marginBottom: 16,
+    backgroundColor: Palette.secondaryBlue,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
   },
   checkinTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#0D47A1',
-    marginBottom: 4,
+    fontSize: typography.body.fontSize,
+    fontWeight: typography.h2.fontWeight,
+    color: Palette.textDark,
+    marginBottom: spacing.xs,
   },
   checkinText: {
-    fontSize: 14,
-    color: '#424242',
+    fontSize: typography.caption.fontSize,
+    color: Palette.textDark,
   },
   moodSection: {
-    marginHorizontal: 20,
-    borderRadius: 20,
-    padding: 24,
-    marginBottom: 16,
-    elevation: 3,
+    marginHorizontal: spacing.lg,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    ...shadows.medium,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#424242',
-    marginBottom: 16,
+    fontSize: typography.h3.fontSize,
+    fontWeight: typography.h3.fontWeight,
+    color: Palette.textDark,
+    marginBottom: spacing.md,
   },
   moodScrollContainer: {
-    paddingRight: 16,
+    paddingRight: spacing.md,
   },
   moodCard: {
     width: 70,
     height: 70,
-    borderRadius: 16,
-    marginRight: 16,
+    borderRadius: borderRadius.lg,
+    marginRight: spacing.md,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 3,
+    ...shadows.medium,
   },
   selectedMood: {
     transform: [{ scale: 1.1 }],
-    shadowColor: '#424242',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
+    ...shadows.high,
   },
   moodName: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 12,
-    marginTop: 4,
+    color: Palette.white,
+    fontWeight: typography.h3.fontWeight,
+    fontSize: typography.small.fontSize,
+    marginTop: spacing.xs,
   },
   journalButton: {
-    marginTop: 16,
+    marginTop: spacing.md,
   },
   journalGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
-    borderRadius: 12,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
   },
   journalButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    marginRight: 10,
+    color: Palette.white,
+    fontWeight: typography.h3.fontWeight,
+    marginRight: spacing.sm,
   },
   quickStatsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginHorizontal: 20,
-    marginBottom: 24,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
   },
   quickStat: {
     alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 12,
-    borderRadius: 12,
+    backgroundColor: Palette.card,
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
     width: '30%',
-    elevation: 2,
+    ...shadows.low,
   },
   quickStatValue: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#009688',
-    marginTop: 4,
+    color: Palette.primary,
+    marginTop: spacing.xs,
   },
   quickStatLabel: {
-    fontSize: 12,
-    color: '#616161',
+    fontSize: typography.small.fontSize,
+    color: Palette.textLight,
   },
   progressPreview: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    marginHorizontal: 20,
-    marginBottom: 20,
-    elevation: 2,
+    backgroundColor: Palette.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+    ...shadows.low,
   },
   sectionTitleAlt: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#00897B',
-    marginBottom: 16,
+    fontSize: typography.h3.fontSize,
+    fontWeight: typography.h3.fontWeight,
+    color: Palette.primaryDark,
+    marginBottom: spacing.md,
   },
   chartContainer: {
     flexDirection: 'row',
@@ -805,33 +803,33 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   seeMoreText: {
-    color: '#00897B',
+    color: Palette.primaryDark,
     alignSelf: 'flex-end',
-    marginTop: 8,
-    fontWeight: '600',
+    marginTop: spacing.sm,
+    fontWeight: typography.h3.fontWeight,
   },
   recentActivity: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    marginHorizontal: 20,
-    marginBottom: 20,
+    backgroundColor: Palette.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
   },
   emptyText: {
-    color: '#9E9E9E',
+    color: Palette.textLight,
     textAlign: 'center',
-    marginVertical: 16,
+    marginVertical: spacing.md,
   },
   seeMoreButton: {
-    marginTop: 8,
+    marginTop: spacing.sm,
     alignSelf: 'flex-end',
   },
   activityItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: Palette.border,
   },
   activityIconContainer: {
     width: 40,
@@ -839,66 +837,66 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 15,
+    marginRight: spacing.sm,
   },
   activityLabel: {
     flex: 1,
-    fontSize: 16,
-    color: '#555',
+    fontSize: typography.body.fontSize,
+    color: Palette.textMedium,
   },
   activityValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: typography.body.fontSize,
+    fontWeight: typography.h2.fontWeight,
+    color: Palette.textDark,
   },
   tipCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    marginHorizontal: 20,
-    marginBottom: 20,
-    elevation: 2,
+    backgroundColor: Palette.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+    ...shadows.low,
   },
   tipHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: spacing.sm,
   },
   tipTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#00897B',
-    marginLeft: 8,
+    fontSize: typography.body.fontSize,
+    fontWeight: typography.h2.fontWeight,
+    color: Palette.primaryDark,
+    marginLeft: spacing.sm,
   },
   tipContent: {
-    fontSize: 14,
-    color: '#616161',
-    lineHeight: 22,
+    fontSize: typography.caption.fontSize,
+    color: Palette.textLight,
+    lineHeight: typography.caption.lineHeight,
   },
   emergencyCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#F45957',
-    padding: 16,
-    borderRadius: 12,
-    marginHorizontal: 20,
-    elevation: 2,
+    backgroundColor: Palette.secondaryRed,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginHorizontal: spacing.lg,
+    ...shadows.low,
   },
   emergencyText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
+    color: Palette.white,
+    fontWeight: typography.h3.fontWeight,
+    fontSize: typography.body.fontSize,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fdfdfd',
+    backgroundColor: Palette.background,
   },
   loadingText: {
-    marginTop: 16,
-    color: '#616161',
+    marginTop: spacing.md,
+    color: Palette.textLight,
   },
 });
 

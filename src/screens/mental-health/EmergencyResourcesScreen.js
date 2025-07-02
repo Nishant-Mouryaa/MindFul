@@ -1,3 +1,4 @@
+
 import React from 'react';
 import {
   View,
@@ -12,6 +13,15 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+// Import your theme constants
+import {
+  Palette,
+  spacing,
+  typography,
+  shadows,
+  borderRadius,
+} from '../../theme/colors'; // Adjust path as needed
+
 export default function EmergencyResourcesScreen() {
   const emergencyContacts = [
     {
@@ -20,7 +30,7 @@ export default function EmergencyResourcesScreen() {
       type: 'phone',
       description: '24/7 free, confidential support for people in distress.',
       icon: 'phone-hangup',
-      color: '#E57373',
+      color: Palette.secondaryRed, // or keep "#E57373" if you prefer
     },
     {
       name: 'Crisis Text Line',
@@ -29,7 +39,7 @@ export default function EmergencyResourcesScreen() {
       type: 'text',
       description: 'Text with a trained crisis counselor for free, 24/7.',
       icon: 'message-text',
-      color: '#7986CB',
+      color: Palette.secondaryPurple, // or keep "#7986CB" if you prefer
     },
     {
       name: 'The Trevor Project (for LGBTQ Youth)',
@@ -37,32 +47,54 @@ export default function EmergencyResourcesScreen() {
       type: 'phone',
       description: 'Crisis intervention and suicide prevention for LGBTQ youth.',
       icon: 'account-heart',
-      color: '#BA68C8',
+      color: Palette.secondaryPink, // or keep "#BA68C8" if you prefer
     },
     {
-        name: 'Emergency Services',
-        number: '911',
-        type: 'phone',
-        description: 'For immediate, life-threatening emergencies.',
-        icon: 'ambulance',
-        color: '#D32F2F',
+      name: 'Emergency Services',
+      number: '911',
+      type: 'phone',
+      description: 'For immediate, life-threatening emergencies.',
+      icon: 'ambulance',
+      color: '#D32F2F', // A custom color or update to your palette
     },
   ];
 
   const copingStrategies = [
-    { title: 'Breathe', description: 'Take 5 slow, deep breaths.', icon: 'weather-windy', color: '#4DB6AC' },
-    { title: 'Ground Yourself', description: 'Use the 5-4-3-2-1 method.', icon: 'earth', color: '#64B5F6' },
-    { title: 'Mindful Walk', description: 'Walk and notice your surroundings.', icon: 'walk', color: '#FFB74D' },
-    { title: 'Reach Out', description: 'Call or text a trusted friend.', icon: 'account-multiple', color: '#81C784' },
+    {
+      title: 'Breathe',
+      description: 'Take 5 slow, deep breaths.',
+      icon: 'weather-windy',
+      color: Palette.primary, // or keep "#4DB6AC"
+    },
+    {
+      title: 'Ground Yourself',
+      description: 'Use the 5-4-3-2-1 method.',
+      icon: 'earth',
+      color: Palette.secondaryBlue, // or keep "#64B5F6"
+    },
+    {
+      title: 'Mindful Walk',
+      description: 'Walk and notice your surroundings.',
+      icon: 'walk',
+      color: Palette.secondaryOrange, // or keep "#FFB74D"
+    },
+    {
+      title: 'Reach Out',
+      description: 'Call or text a trusted friend.',
+      icon: 'account-multiple',
+      color: '#81C784', // or swap with Palette if you have a matching color
+    },
   ];
 
   const handlePress = (contact) => {
     let action = 'Call';
     let url = `tel:${contact.number}`;
-    
+
     if (contact.type === 'text') {
-        action = 'Text';
-        url = `sms:${contact.number}${Platform.OS === "ios" ? "&" : "?"}body=${encodeURIComponent(contact.text)}`;
+      action = 'Text';
+      url = `sms:${contact.number}${
+        Platform.OS === 'ios' ? '&' : '?'
+      }body=${encodeURIComponent(contact.text)}`;
     }
 
     Alert.alert(
@@ -72,7 +104,10 @@ export default function EmergencyResourcesScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: action,
-          onPress: () => Linking.openURL(url).catch(err => Alert.alert("Failed to open.", err.toString())),
+          onPress: () =>
+            Linking.openURL(url).catch((err) =>
+              Alert.alert('Failed to open.', err.toString())
+            ),
         },
       ]
     );
@@ -82,53 +117,91 @@ export default function EmergencyResourcesScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
-          <MaterialCommunityIcons name="lifebuoy" size={40} color="#E57373" />
+          <MaterialCommunityIcons
+            name="lifebuoy"
+            size={40}
+            color={Palette.secondaryRed}
+            // or keep "#E57373" if you prefer
+          />
           <Text style={styles.title}>Emergency Support</Text>
           <Text style={styles.subtitle}>
             If you're in crisis, you're not alone. Immediate help is available.
           </Text>
         </View>
-        
-        <View style={styles.card}>
-            <Text style={styles.cardTitle}>Crisis Hotlines</Text>
-            {emergencyContacts.map((contact, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[styles.contactItem, index === emergencyContacts.length-1 && {borderBottomWidth: 0}]}
-                onPress={() => handlePress(contact)}
+
+        <View style={[styles.card, shadows.low]}>
+          <Text style={styles.cardTitle}>Crisis Hotlines</Text>
+          {emergencyContacts.map((contact, index) => (
+            <TouchableOpacity
+              key={index}
+              style={[
+                styles.contactItem,
+                index === emergencyContacts.length - 1 && { borderBottomWidth: 0 },
+              ]}
+              onPress={() => handlePress(contact)}
+            >
+              <View
+                style={[
+                  styles.contactIconContainer,
+                  { backgroundColor: contact.color + '20' },
+                ]}
               >
-                <View style={[styles.contactIconContainer, {backgroundColor: contact.color + '20'}]}>
-                  <MaterialCommunityIcons name={contact.icon} size={28} color={contact.color} />
-                </View>
-                <View style={styles.contactInfo}>
-                  <Text style={styles.contactName}>{contact.name}</Text>
-                  <Text style={styles.contactDescription}>{contact.description}</Text>
-                </View>
-                <MaterialCommunityIcons name="chevron-right" size={24} color="#ccc" />
-              </TouchableOpacity>
-            ))}
+                <MaterialCommunityIcons
+                  name={contact.icon}
+                  size={28}
+                  color={contact.color}
+                />
+              </View>
+              <View style={styles.contactInfo}>
+                <Text style={styles.contactName}>{contact.name}</Text>
+                <Text style={styles.contactDescription}>
+                  {contact.description}
+                </Text>
+              </View>
+              <MaterialCommunityIcons
+                name="chevron-right"
+                size={24}
+                color={Palette.textLight}
+              />
+            </TouchableOpacity>
+          ))}
         </View>
 
-        <View style={styles.card}>
-            <Text style={styles.cardTitle}>Quick Coping Strategies</Text>
-            <View style={styles.strategiesGrid}>
-              {copingStrategies.map((strategy, index) => (
-                <View key={index} style={styles.strategyCard}>
-                  <View style={[styles.strategyIconContainer, {backgroundColor: strategy.color + '20'}]}>
-                    <MaterialCommunityIcons name={strategy.icon} size={30} color={strategy.color} />
-                  </View>
-                  <Text style={styles.strategyTitle}>{strategy.title}</Text>
-                  <Text style={styles.strategyDescription}>{strategy.description}</Text>
+        <View style={[styles.card, shadows.low]}>
+          <Text style={styles.cardTitle}>Quick Coping Strategies</Text>
+          <View style={styles.strategiesGrid}>
+            {copingStrategies.map((strategy, index) => (
+              <View key={index} style={styles.strategyCard}>
+                <View
+                  style={[
+                    styles.strategyIconContainer,
+                    { backgroundColor: strategy.color + '20' },
+                  ]}
+                >
+                  <MaterialCommunityIcons
+                    name={strategy.icon}
+                    size={30}
+                    color={strategy.color}
+                  />
                 </View>
-              ))}
-            </View>
+                <Text style={styles.strategyTitle}>{strategy.title}</Text>
+                <Text style={styles.strategyDescription}>
+                  {strategy.description}
+                </Text>
+              </View>
+            ))}
+          </View>
         </View>
 
         <View style={styles.noticeContainer}>
-          <MaterialCommunityIcons name="alert-circle-outline" size={24} color="#D32F2F" />
+          <MaterialCommunityIcons
+            name="alert-circle-outline"
+            size={24}
+            color="#D32F2F" // or a palette color if you prefer
+          />
           <Text style={styles.noticeText}>
-            If you are in immediate danger or having thoughts of harming yourself or others, 
-            please call 911 or go to the nearest emergency room.
+            If you are in immediate danger or having thoughts of harming yourself
+            or others, please call 911 or go to the nearest emergency room.
           </Text>
         </View>
       </ScrollView>
@@ -136,123 +209,123 @@ export default function EmergencyResourcesScreen() {
   );
 }
 
+// Updated styles with theme references
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: Palette.background,
   },
   scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
+    padding: spacing.lg,
+    paddingBottom: spacing.xl,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-    marginTop: 10,
-    marginBottom: 8,
+    ...typography.h1,
+    color: Palette.textDark,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#666',
+    ...typography.body,
+    color: Palette.textLight,
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: typography.body.lineHeight, // or keep "22" if you prefer
+    marginBottom: spacing.md,
   },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    marginBottom: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    backgroundColor: Palette.card,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.lg,
+    // Example of using shadows from theme:
+    // ...shadows.low, // or shadows.medium, etc.
+    borderWidth: 0, // remove if you prefer no border
   },
   cardTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 10,
-    paddingTop: 10,
+    ...typography.h2,
+    color: Palette.textDark,
+    marginBottom: spacing.sm,
+    paddingTop: spacing.sm,
   },
   contactItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: 15,
-      borderBottomWidth: 1,
-      borderBottomColor: '#F0F0F0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Palette.border,
   },
   contactIconContainer: {
     width: 50,
     height: 50,
-    borderRadius: 25,
+    borderRadius: borderRadius.full,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 15,
+    marginRight: spacing.md,
   },
   contactInfo: {
     flex: 1,
   },
   contactName: {
-    fontSize: 16,
+    ...typography.body,
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
+    color: Palette.textDark,
+    marginBottom: spacing.xs,
   },
   contactDescription: {
-    fontSize: 14,
-    color: '#666',
+    ...typography.small,
+    color: Palette.textMedium,
     lineHeight: 18,
   },
   strategiesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginTop: 10,
+    marginTop: spacing.sm,
   },
   strategyCard: {
     width: '48%',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   strategyIconContainer: {
-      width: 60,
-      height: 60,
-      borderRadius: 30,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: 12,
+    width: 60,
+    height: 60,
+    borderRadius: borderRadius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
   },
   strategyTitle: {
-    fontSize: 16,
+    ...typography.body,
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
+    color: Palette.textDark,
+    marginBottom: spacing.xs,
   },
   strategyDescription: {
-    fontSize: 13,
-    color: '#666',
+    ...typography.small,
+    color: Palette.textLight,
     textAlign: 'center',
     lineHeight: 18,
   },
   noticeContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#FFEBEE',
-    borderRadius: 12,
-    padding: 15,
+    backgroundColor: '#FFEBEE', // or a theme-based color if desired
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
   },
   noticeText: {
+    ...typography.caption,
+    color: '#C62828', // or Palette.secondaryRed if it matches your design
+    marginLeft: spacing.sm,
     flex: 1,
-    fontSize: 14,
-    color: '#C62828',
-    marginLeft: 12,
     lineHeight: 20,
   },
-}); 
+});
+ 

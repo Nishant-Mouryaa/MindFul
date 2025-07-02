@@ -16,7 +16,26 @@ import { useNavigation } from '@react-navigation/native';
 // Firebase imports
 import { getAuth } from 'firebase/auth';
 import { db } from '../../config/firebase';
-import { collection, addDoc, query, where, getDocs, serverTimestamp, doc, updateDoc, increment } from 'firebase/firestore';
+import {
+  collection,
+  addDoc,
+  query,
+  where,
+  getDocs,
+  serverTimestamp,
+  doc,
+  updateDoc,
+  increment,
+} from 'firebase/firestore';
+
+// Import your theme constants
+import {
+  Palette,
+  spacing,
+  typography,
+  shadows,
+  borderRadius,
+} from '../../theme/colors'; // Adjust import path as needed
 
 export default function CBTScreen() {
   const [thoughtRecord, setThoughtRecord] = useState({
@@ -33,10 +52,11 @@ export default function CBTScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const navigation = useNavigation();
 
+  // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
-  // Fallback if cbtSteps[currentStep] is ever out of range or undefined
+  // Default step data (in case of out-of-range index)
   const defaultStepData = {
     title: 'Loading…',
     description: '',
@@ -46,6 +66,7 @@ export default function CBTScreen() {
     color: '#CCCCCC',
   };
 
+  // cbtSteps array (replace or map these colors to your theme if you wish)
   const cbtSteps = [
     {
       title: 'The Situation',
@@ -53,7 +74,7 @@ export default function CBTScreen() {
       field: 'situation',
       placeholder: 'e.g., I made a mistake on a work project.',
       icon: 'map-marker-outline',
-      color: '#4DB6AC'
+      color: Palette.primary, // #4DB6AC
     },
     {
       title: 'Your Emotion(s)',
@@ -61,7 +82,7 @@ export default function CBTScreen() {
       field: 'emotion',
       placeholder: 'e.g., Anxiety (8/10), Shame (6/10)',
       icon: 'emoticon-sad-outline',
-      color: '#FFB74D'
+      color: Palette.secondaryOrange, // #FFB74D
     },
     {
       title: 'Automatic Thought(s)',
@@ -69,7 +90,7 @@ export default function CBTScreen() {
       field: 'automaticThought',
       placeholder: 'e.g., "I\'m a failure", "I always mess things up."',
       icon: 'brain',
-      color: '#7986CB'
+      color: Palette.secondaryPurple, // #7986CB
     },
     {
       title: 'Evidence For',
@@ -77,7 +98,7 @@ export default function CBTScreen() {
       field: 'evidenceFor',
       placeholder: 'Focus on facts, not interpretations.',
       icon: 'check-circle-outline',
-      color: '#64B5F6'
+      color: Palette.secondaryBlue, // #64B5F6
     },
     {
       title: 'Evidence Against',
@@ -85,7 +106,7 @@ export default function CBTScreen() {
       field: 'evidenceAgainst',
       placeholder: 'Is there another way to see this?',
       icon: 'close-circle-outline',
-      color: '#E57373'
+      color: Palette.secondaryRed, // #E57373
     },
     {
       title: 'Balanced Thought',
@@ -93,7 +114,7 @@ export default function CBTScreen() {
       field: 'balancedThought',
       placeholder: 'e.g., "I made a mistake, but it doesn\'t mean I\'m a failure."',
       icon: 'scale-balance',
-      color: '#BA68C8'
+      color: Palette.secondaryPink, // #BA68C8
     },
     {
       title: 'New Emotion(s)',
@@ -101,16 +122,16 @@ export default function CBTScreen() {
       field: 'newEmotion',
       placeholder: 'e.g., Relief (4/10).',
       icon: 'emoticon-happy-outline',
-      color: '#81C784'
+      color: '#81C784', // Not in palette; keep or replace as desired
     },
   ];
 
-  // Safely retrieve the step data by bounding currentStep
+  // Safely retrieve the step data
   const stepCount = cbtSteps.length;
   const safeStepIndex = currentStep >= 0 && currentStep < stepCount ? currentStep : 0;
   const currentStepData = cbtSteps[safeStepIndex] || defaultStepData;
 
-  // Animate when the step changes
+  // Animate on step change
   const runAnimation = () => {
     fadeAnim.setValue(0);
     slideAnim.setValue(30);
@@ -124,7 +145,7 @@ export default function CBTScreen() {
         toValue: 0,
         duration: 400,
         useNativeDriver: true,
-      })
+      }),
     ]).start();
   };
 
@@ -134,18 +155,18 @@ export default function CBTScreen() {
 
   // Update a specific field in thoughtRecord
   const updateField = (field, value) => {
-    setThoughtRecord(prev => ({
+    setThoughtRecord((prev) => ({
       ...prev,
       [field]: value,
     }));
   };
 
-  // Navigation handlers
+  // Step navigation
   const nextStep = () => {
     if (safeStepIndex < stepCount - 1) {
       setCurrentStep(safeStepIndex + 1);
     } else {
-      // If we're on the last step, attempt to save
+      // If on the last step, save
       saveThoughtRecord();
     }
   };
@@ -159,7 +180,6 @@ export default function CBTScreen() {
   // ========================
   // Firestore Integration
   // ========================
-  // On component mount, load existing records
   useEffect(() => {
     loadRecords();
   }, []);
@@ -175,22 +195,22 @@ export default function CBTScreen() {
           where('timestamp', '!=', null)
         );
         const querySnapshot = await getDocs(q);
-        const firestoreRecords = querySnapshot.docs.map(doc => ({
+        const firestoreRecords = querySnapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
-          date: doc.data().timestamp?.toDate() || new Date()
+          date: doc.data().timestamp?.toDate() || new Date(),
         }));
         setSavedRecords(firestoreRecords);
         await AsyncStorage.setItem('cbtRecords', JSON.stringify(firestoreRecords));
       } else {
-        // If user not authenticated, use AsyncStorage
+        // If not logged in, use AsyncStorage
         const localRecords = await AsyncStorage.getItem('cbtRecords');
         if (localRecords) {
           setSavedRecords(JSON.parse(localRecords));
         }
       }
     } catch (error) {
-      console.error("Error loading records:", error);
+      console.error('Error loading records:', error);
       // Fallback to local if Firestore fails
       const localRecords = await AsyncStorage.getItem('cbtRecords');
       if (localRecords) {
@@ -204,45 +224,52 @@ export default function CBTScreen() {
   const saveThoughtRecord = async () => {
     const auth = getAuth();
     const user = auth.currentUser;
-  
+
     if (!user) {
-      Alert.alert("Not logged in", "Please sign in to save your records.");
+      Alert.alert('Not logged in', 'Please sign in to save your records.');
       return;
     }
-  
+
     const newRecord = {
       ...thoughtRecord,
-      userId: user.uid, // Make sure this is included
+      userId: user.uid,
       date: new Date().toISOString(),
       timestamp: serverTimestamp(),
     };
-  
+
     try {
       setIsLoading(true);
-      
+
       // Save to Firestore
       const docRef = await addDoc(collection(db, 'cbtRecords'), newRecord);
 
       // Increment cbtSessions in user document
       const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, {
-        cbtSessions: increment(1)
+        cbtSessions: increment(1),
       });
 
-      // Update local state
-      setSavedRecords(prev => [{
-        ...newRecord,
-        id: docRef.id // Include Firestore ID
-      }, ...prev]);
-      
+      // Update local records
+      setSavedRecords((prev) => [
+        { ...newRecord, id: docRef.id },
+        ...prev,
+      ]);
+
       // Reset form
-      setThoughtRecord({ /* reset all fields */ });
+      setThoughtRecord({
+        situation: '',
+        emotion: '',
+        automaticThought: '',
+        evidenceFor: '',
+        evidenceAgainst: '',
+        balancedThought: '',
+        newEmotion: '',
+      });
       setCurrentStep(0);
-      
+
       Alert.alert('Success', 'Record saved successfully!');
-      
     } catch (error) {
-      console.error("Error saving record:", error);
+      console.error('Error saving record:', error);
       Alert.alert('Error', error.message);
     } finally {
       setIsLoading(false);
@@ -252,32 +279,38 @@ export default function CBTScreen() {
   // ========================
   // UI Renderers
   // ========================
-
-  // Button to handle either "Next" or "Complete" based on the step
   const renderSaveButton = () => {
     if (isLoading) {
       return (
-        <TouchableOpacity 
-          style={[styles.navButton, styles.nextButton, { backgroundColor: '#BDBDBD' }]}
+        <TouchableOpacity
+          style={[
+            styles.navButton,
+            styles.nextButton,
+            { backgroundColor: Palette.border }, // disabled style
+          ]}
           disabled
         >
-          <MaterialCommunityIcons name="loading" size={20} color="#fff" />
+          <MaterialCommunityIcons name="loading" size={20} color={Palette.white} />
         </TouchableOpacity>
       );
     }
 
     return (
-      <TouchableOpacity 
-        style={[styles.navButton, styles.nextButton, { backgroundColor: currentStepData.color }]} 
+      <TouchableOpacity
+        style={[
+          styles.navButton,
+          styles.nextButton,
+          { backgroundColor: currentStepData.color },
+        ]}
         onPress={nextStep}
       >
-        <Text style={[styles.navButtonText, { color: '#fff' }]}>
+        <Text style={[styles.navButtonText, { color: Palette.white }]}>
           {safeStepIndex < stepCount - 1 ? 'Next' : 'Complete'}
         </Text>
         <MaterialCommunityIcons
           name={safeStepIndex < stepCount - 1 ? 'arrow-right' : 'check'}
           size={20}
-          color="#fff"
+          color={Palette.white}
         />
       </TouchableOpacity>
     );
@@ -286,11 +319,15 @@ export default function CBTScreen() {
   const navigationContainer = (
     <View style={styles.navigationContainer}>
       <TouchableOpacity
-        style={[styles.navButton, styles.prevButton, { opacity: safeStepIndex === 0 ? 0.5 : 1 }]} 
+        style={[
+          styles.navButton,
+          styles.prevButton,
+          { opacity: safeStepIndex === 0 ? 0.5 : 1 },
+        ]}
         onPress={prevStep}
         disabled={safeStepIndex === 0}
       >
-        <MaterialCommunityIcons name="arrow-left" size={20} color="#555" />
+        <MaterialCommunityIcons name="arrow-left" size={20} color={Palette.textMedium} />
         <Text style={styles.navButtonText}>Prev</Text>
       </TouchableOpacity>
 
@@ -317,7 +354,7 @@ export default function CBTScreen() {
               style={[
                 styles.progressSegment,
                 index <= safeStepIndex && {
-                  backgroundColor: step?.color ?? defaultStepData.color
+                  backgroundColor: step?.color ?? defaultStepData.color,
                 },
               ]}
             />
@@ -328,6 +365,7 @@ export default function CBTScreen() {
         <Animated.View
           style={[
             styles.card,
+            shadows.medium,
             {
               opacity: fadeAnim,
               transform: [{ translateY: slideAnim }],
@@ -336,10 +374,15 @@ export default function CBTScreen() {
           ]}
         >
           <View style={styles.stepHeader}>
-            <View style={[
-              styles.stepIconContainer,
-              { backgroundColor: (currentStepData?.color ?? defaultStepData.color) + '20' }
-            ]}>
+            <View
+              style={[
+                styles.stepIconContainer,
+                {
+                  backgroundColor:
+                    (currentStepData?.color ?? defaultStepData.color) + '20',
+                },
+              ]}
+            >
               <MaterialCommunityIcons
                 name={currentStepData?.icon ?? defaultStepData.icon}
                 size={28}
@@ -358,7 +401,7 @@ export default function CBTScreen() {
           <TextInput
             style={styles.textInput}
             placeholder={currentStepData?.placeholder ?? ''}
-            placeholderTextColor="#999"
+            placeholderTextColor={Palette.textLight}
             value={thoughtRecord[currentStepData?.field] ?? ''}
             onChangeText={(text) => updateField(currentStepData?.field, text)}
             multiline
@@ -371,22 +414,31 @@ export default function CBTScreen() {
 
         {/* Recent Saved Records (Optional) */}
         {savedRecords.length > 0 && (
-          <View style={styles.card}>
+          <View style={[styles.card, shadows.low]}>
             <Text style={styles.cardTitle}>Recent Records</Text>
-            <View style={{ alignItems: 'flex-end', marginBottom: 8 }}>
+            <View style={{ alignItems: 'flex-end', marginBottom: spacing.sm }}>
               <TouchableOpacity
                 style={styles.viewAllButton}
                 onPress={() => navigation.navigate('SavedRecordsScreen')}
                 activeOpacity={0.8}
               >
-                <MaterialCommunityIcons name="eye" size={18} color="#fff" style={{ marginRight: 6 }} />
+                <MaterialCommunityIcons
+                  name="eye"
+                  size={18}
+                  color={Palette.white}
+                  style={{ marginRight: spacing.xs }}
+                />
                 <Text style={styles.viewAllButtonText}>View All</Text>
               </TouchableOpacity>
             </View>
-            
+
             {savedRecords.slice(0, 2).map((record) => (
               <View key={record.id ?? record.date} style={styles.recordItem}>
-                <MaterialCommunityIcons name="file-document-outline" size={24} color="#7986CB" />
+                <MaterialCommunityIcons
+                  name="file-document-outline"
+                  size={24}
+                  color={Palette.secondaryPurple}
+                />
                 <View style={styles.recordTextContainer}>
                   <Text style={styles.recordSituation} numberOfLines={1}>
                     {record.situation || 'Untitled Record'}
@@ -395,7 +447,11 @@ export default function CBTScreen() {
                     {new Date(record.date).toLocaleDateString()}
                   </Text>
                 </View>
-                <MaterialCommunityIcons name="chevron-right" size={24} color="#ccc" />
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={24}
+                  color={Palette.textLight}
+                />
               </View>
             ))}
           </View>
@@ -405,157 +461,148 @@ export default function CBTScreen() {
   );
 }
 
-////////////////////////////////////////////////////////////////////////////////
-// Styles
-////////////////////////////////////////////////////////////////////////////////
-
+// Updated styles using theme constants
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: Palette.background,
   },
   scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
+    padding: spacing.lg,
+    paddingBottom: spacing.xl,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
+    ...typography.h1,
+    color: Palette.textDark,
+    marginBottom: spacing.sm,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#666',
+    ...typography.body,
+    color: Palette.textLight,
     textAlign: 'center',
   },
   progressContainer: {
     flexDirection: 'row',
     height: 6,
-    borderRadius: 3,
-    backgroundColor: '#E0E0E0',
-    marginBottom: 25,
+    borderRadius: borderRadius.sm,
+    backgroundColor: Palette.border,
+    marginBottom: spacing.xl,
     overflow: 'hidden',
   },
   progressSegment: {
     flex: 1,
-    backgroundColor: '#E0E0E0',
+    backgroundColor: Palette.border,
   },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 25,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
+    backgroundColor: Palette.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
     borderWidth: 1,
   },
   cardTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 16,
+    ...typography.h2,
+    color: Palette.textDark,
+    marginBottom: spacing.md,
   },
   stepHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: spacing.sm,
   },
   stepIconContainer: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: borderRadius.full,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: spacing.sm,
   },
   stepTitle: {
-    fontSize: 22,
+    ...typography.h3,
     fontWeight: 'bold',
-    color: '#333',
+    color: Palette.textDark,
     flex: 1,
   },
   stepDescription: {
-    fontSize: 15,
-    color: '#555',
-    marginBottom: 20,
+    ...typography.body,
+    color: Palette.textMedium,
+    marginBottom: spacing.md,
     lineHeight: 22,
   },
   textInput: {
-    backgroundColor: '#F8F9FA',
-    borderRadius: 10,
-    padding: 15,
-    fontSize: 16,
-    color: '#333',
+    backgroundColor: Palette.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    fontSize: typography.body.fontSize,
+    color: Palette.textDark,
     minHeight: 120,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: Palette.border,
   },
   navigationContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 25,
+    marginBottom: spacing.xl,
   },
   navButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 25,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.full,
   },
   prevButton: {
-    backgroundColor: '#fff',
+    backgroundColor: Palette.white,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: Palette.border,
   },
   nextButton: {
-    // The dynamic backgroundColor is set in renderSaveButton()
+    // backgroundColor set dynamically
   },
   navButtonText: {
-    fontSize: 16,
+    ...typography.body,
     fontWeight: 'bold',
-    marginHorizontal: 8,
+    marginHorizontal: spacing.xs,
   },
   recordItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: Palette.border,
   },
   recordTextContainer: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: spacing.sm,
   },
   recordSituation: {
-    fontSize: 16,
-    color: '#333',
+    ...typography.body,
     fontWeight: '500',
+    color: Palette.textDark,
   },
   recordDate: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 2,
+    ...typography.small,
+    color: Palette.textLight,
+    marginTop: spacing.xs,
   },
   viewAllButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#7986CB',
-    paddingVertical: 8,
-    paddingHorizontal: 18,
-    borderRadius: 20,
-    elevation: 2,
+    backgroundColor: Palette.secondaryPurple,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.full,
+    elevation: 2, // or shadows.low if you prefer
   },
   viewAllButtonText: {
-    color: '#fff',
+    ...typography.body,
+    color: Palette.white,
     fontWeight: 'bold',
     fontSize: 15,
     letterSpacing: 0.5,

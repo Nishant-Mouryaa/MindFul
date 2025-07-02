@@ -1,17 +1,27 @@
+
 import React from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
   TouchableOpacity,
   SafeAreaView,
   Share,
-  Platform
+  Platform,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import moment from 'moment';
+
+// Import your theme constants
+import {
+  Palette,
+  spacing,
+  typography,
+  shadows,
+  borderRadius,
+} from '../../theme/colors'; // Adjust path to match your project
 
 export default function RecordDetailScreen({ route, navigation }) {
   const { record } = route.params;
@@ -26,13 +36,13 @@ export default function RecordDetailScreen({ route, navigation }) {
     );
   }
 
-  const formattedDate = record.date 
+  const formattedDate = record.date
     ? moment(record.date).format('MMMM D, YYYY [•] h:mm A')
     : 'Unknown Date';
 
   const handleShare = async () => {
     try {
-      const message = 
+      const message =
         `CBT Thought Record\n\n` +
         `📅 ${formattedDate}\n\n` +
         `💭 Situation: ${record.situation || 'N/A'}\n` +
@@ -45,16 +55,16 @@ export default function RecordDetailScreen({ route, navigation }) {
 
       await Share.share({
         message,
-        title: 'My CBT Thought Record'
+        title: 'My CBT Thought Record',
       });
     } catch (error) {
       console.error('Error sharing:', error.message);
     }
   };
 
-  // (Optional) handleEdit placeholder
   const handleEdit = () => {
-    // Example: navigation.navigate('EditRecordScreen', { record });
+    // Example navigation for editing:
+    // navigation.navigate('EditRecordScreen', { record });
     console.log('Edit record tapped!');
   };
 
@@ -62,28 +72,18 @@ export default function RecordDetailScreen({ route, navigation }) {
     <SafeAreaView style={styles.safeArea}>
       {/* Header with gradient background */}
       <LinearGradient
-        colors={['#1E88E5', '#42A5F5']}
+        colors={[Palette.secondaryBlue, Palette.primary]} // Adjust or keep a gradient you like
         style={styles.gradientHeader}
       >
         <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.iconButton}
-            onPress={() => navigation.goBack()}
-          >
-            <MaterialCommunityIcons name="arrow-left" size={24} color="#FFFFFF" />
+          <TouchableOpacity style={styles.iconButton} onPress={() => navigation.goBack()}>
+            <MaterialCommunityIcons name="arrow-left" size={24} color={Palette.white} />
           </TouchableOpacity>
 
           <Text style={styles.headerTitle}>Thought Record</Text>
 
-          <TouchableOpacity 
-            style={styles.iconButton}
-            onPress={handleShare}
-          >
-            <MaterialCommunityIcons 
-              name="share-variant" 
-              size={20} 
-              color="#FFFFFF" 
-            />
+          <TouchableOpacity style={styles.iconButton} onPress={handleShare}>
+            <MaterialCommunityIcons name="share-variant" size={20} color={Palette.white} />
           </TouchableOpacity>
         </View>
       </LinearGradient>
@@ -92,36 +92,32 @@ export default function RecordDetailScreen({ route, navigation }) {
       <ScrollView contentContainerStyle={styles.contentContainer} style={{ flex: 1 }}>
         {/* Date display */}
         <View style={styles.dateContainer}>
-          <MaterialCommunityIcons name="calendar" size={16} color="#757575" />
+          <MaterialCommunityIcons name="calendar" size={16} color={Palette.textMedium} />
           <Text style={styles.dateText}>{formattedDate}</Text>
         </View>
 
         {/* Card: The Situation */}
-        <View style={styles.card}>
+        <View style={[styles.card, shadows.low]}>
           <View style={styles.sectionHeader}>
-            <MaterialCommunityIcons name="map-marker-outline" size={20} color="#4DB6AC" />
+            <MaterialCommunityIcons name="map-marker-outline" size={20} color={Palette.primary} />
             <Text style={styles.sectionTitle}>The Situation</Text>
           </View>
-          <Text style={styles.sectionContent}>
-            {record.situation || 'No situation described'}
-          </Text>
+          <Text style={styles.sectionContent}>{record.situation || 'No situation described'}</Text>
         </View>
 
         {/* Card: Your Emotion(s) */}
-        <View style={styles.card}>
+        <View style={[styles.card, shadows.low]}>
           <View style={styles.sectionHeader}>
-            <MaterialCommunityIcons name="emoticon-sad-outline" size={20} color="#FFB74D" />
+            <MaterialCommunityIcons name="emoticon-sad-outline" size={20} color={Palette.secondaryOrange} />
             <Text style={styles.sectionTitle}>Your Emotion(s)</Text>
           </View>
-          <Text style={styles.sectionContent}>
-            {record.emotion || 'No emotions recorded'}
-          </Text>
+          <Text style={styles.sectionContent}>{record.emotion || 'No emotions recorded'}</Text>
         </View>
 
         {/* Card: Automatic Thought(s) */}
-        <View style={styles.card}>
+        <View style={[styles.card, shadows.low]}>
           <View style={styles.sectionHeader}>
-            <MaterialCommunityIcons name="brain" size={20} color="#7986CB" />
+            <MaterialCommunityIcons name="brain" size={20} color={Palette.secondaryPurple} />
             <Text style={styles.sectionTitle}>Automatic Thought(s)</Text>
           </View>
           <Text style={styles.sectionContent}>
@@ -130,9 +126,9 @@ export default function RecordDetailScreen({ route, navigation }) {
         </View>
 
         {/* Card: Evidence For */}
-        <View style={styles.card}>
+        <View style={[styles.card, shadows.low]}>
           <View style={styles.sectionHeader}>
-            <MaterialCommunityIcons name="check-circle-outline" size={20} color="#64B5F6" />
+            <MaterialCommunityIcons name="check-circle-outline" size={20} color={Palette.secondaryBlue} />
             <Text style={styles.sectionTitle}>Evidence For</Text>
           </View>
           <Text style={styles.sectionContent}>
@@ -141,9 +137,9 @@ export default function RecordDetailScreen({ route, navigation }) {
         </View>
 
         {/* Card: Evidence Against */}
-        <View style={styles.card}>
+        <View style={[styles.card, shadows.low]}>
           <View style={styles.sectionHeader}>
-            <MaterialCommunityIcons name="close-circle-outline" size={20} color="#E57373" />
+            <MaterialCommunityIcons name="close-circle-outline" size={20} color={Palette.secondaryRed} />
             <Text style={styles.sectionTitle}>Evidence Against</Text>
           </View>
           <Text style={styles.sectionContent}>
@@ -152,9 +148,9 @@ export default function RecordDetailScreen({ route, navigation }) {
         </View>
 
         {/* Card: Balanced Thought */}
-        <View style={styles.card}>
+        <View style={[styles.card, shadows.low]}>
           <View style={styles.sectionHeader}>
-            <MaterialCommunityIcons name="scale-balance" size={20} color="#BA68C8" />
+            <MaterialCommunityIcons name="scale-balance" size={20} color={Palette.secondaryPink} />
             <Text style={styles.sectionTitle}>Balanced Thought</Text>
           </View>
           <Text style={[styles.sectionContent, styles.balancedThought]}>
@@ -163,23 +159,18 @@ export default function RecordDetailScreen({ route, navigation }) {
         </View>
 
         {/* Card: New Emotion */}
-        <View style={styles.card}>
+        <View style={[styles.card, shadows.low]}>
           <View style={styles.sectionHeader}>
             <MaterialCommunityIcons name="emoticon-happy-outline" size={20} color="#81C784" />
             <Text style={styles.sectionTitle}>New Emotion</Text>
           </View>
-          <Text style={styles.sectionContent}>
-            {record.newEmotion || 'No new emotions recorded'}
-          </Text>
+          <Text style={styles.sectionContent}>{record.newEmotion || 'No new emotions recorded'}</Text>
         </View>
       </ScrollView>
 
       {/* Optional floating Edit button */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={handleEdit}
-      >
-        <MaterialCommunityIcons name="pencil" size={22} color="#FFF" />
+      <TouchableOpacity style={[styles.fab, shadows.high]} onPress={handleEdit}>
+        <MaterialCommunityIcons name="pencil" size={22} color={Palette.white} />
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -188,14 +179,14 @@ export default function RecordDetailScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: Palette.background,
   },
   gradientHeader: {
-    paddingTop: Platform.OS === 'android' ? 40 : 0, // extra top padding for Android
-    paddingBottom: 16,
-    paddingHorizontal: 16,
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
+    paddingTop: Platform.OS === 'android' ? spacing.xl : spacing.lg, // extra top padding for Android
+    paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderBottomLeftRadius: borderRadius.md,
+    borderBottomRightRadius: borderRadius.md,
     overflow: 'hidden',
   },
   header: {
@@ -204,83 +195,76 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   iconButton: {
-    padding: 8,
+    padding: spacing.sm,
   },
   headerTitle: {
-    fontSize: 22,
+    ...typography.h2,
+    color: Palette.white,
     fontWeight: '700',
-    color: '#FFFFFF',
   },
   contentContainer: {
-    padding: 16,
-    paddingBottom: 30,
+    padding: spacing.md,
+    paddingBottom: spacing.lg,
   },
   dateContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: spacing.lg,
   },
   dateText: {
-    fontSize: 14,
-    color: '#757575',
-    marginLeft: 8,
+    ...typography.small,
+    color: Palette.textLight,
+    marginLeft: spacing.xs,
   },
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    // Shadow for iOS
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.07,
-    shadowRadius: 3,
-    // Elevation for Android
-    elevation: 2,
+    backgroundColor: Palette.card,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: spacing.xs,
   },
   sectionTitle: {
-    fontSize: 17,
+    ...typography.body,
     fontWeight: '600',
-    color: '#333',
-    marginLeft: 8,
+    color: Palette.textDark,
+    marginLeft: spacing.xs,
   },
   sectionContent: {
-    fontSize: 15,
-    color: '#555',
+    ...typography.body,
+    color: Palette.textMedium,
     lineHeight: 22,
-    marginTop: 2,
+    marginTop: spacing.xs / 2,
   },
   balancedThought: {
     fontStyle: 'italic',
-    color: '#1E88E5',
+    color: Palette.secondaryBlue, // or your preferred color
   },
   errorText: {
+    ...typography.body,
     fontSize: 16,
-    color: 'red',
+    color: Palette.secondaryRed,
     textAlign: 'center',
-    marginTop: 20,
+    marginTop: spacing.lg,
   },
   fab: {
     position: 'absolute',
-    bottom: 24,
-    right: 24,
+    bottom: spacing.xxl,
+    right: spacing.xxl,
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#1E88E5',
+    backgroundColor: Palette.secondaryBlue, // or your preferred color
     justifyContent: 'center',
     alignItems: 'center',
-    // Shadow for iOS
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    // Elevation for Android
-    elevation: 4,
+  },
+  container: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
+
