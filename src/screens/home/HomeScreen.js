@@ -14,7 +14,6 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-
 import { getAuth, signOut } from 'firebase/auth';
 import { db } from '../../config/firebase';
 import { 
@@ -28,12 +27,20 @@ import {
   getDoc,
   addDoc
 } from 'firebase/firestore';
+
+import { QuickAction } from '../../components/QuickAction';
+import { QuickStat } from '../../components/QuickStat';
+import { MoodCard } from '../../components/MoodCard';
+import { MiniLineChart } from '../../components/MiniLineChart';
+import { ActivityItem } from '../../components/ActivityItem';
+
 import { Palette, spacing, typography, shadows, borderRadius } from '../../theme/colors';
+
 
 const { width: screenWidth } = Dimensions.get('window');
 
 export default function HomeScreen() {
-  const auth = getAuth();  
+  const auth = getAuth();
   const navigation = useNavigation();
 
   // Animation refs
@@ -46,7 +53,7 @@ export default function HomeScreen() {
   const [recentActivities, setRecentActivities] = useState([]);
   const [moodHistoryData, setMoodHistoryData] = useState({
     labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-    datasets: [{ data: [0, 0, 0, 0, 0, 0, 0], color: () => '#4DB6AC' }]
+    datasets: [{ data: [0, 0, 0, 0, 0, 0, 0], color: () => Palette.primary }]
   });
   const [stats, setStats] = useState({
     streak: 0,
@@ -58,11 +65,11 @@ export default function HomeScreen() {
 
   // Mood options with icons
   const moodOptions = [
-    { name: 'Happy',   icon: 'emoticon-happy-outline', color: Palette.secondaryPink, value: 10 },
+    { name: 'Happy',   icon: 'emoticon-happy-outline', color: Palette.secondaryPink,   value: 10 },
     { name: 'Calm',    icon: 'yin-yang',               color: Palette.secondaryPurple, value: 7 },
     { name: 'Relax',   icon: 'meditation',             color: Palette.secondaryOrange, value: 5 },
-    { name: 'Focused', icon: 'brain',                  color: Palette.primaryLight, value: 8 },
-    { name: 'Tired',   icon: 'sleep',                  color: Palette.border, value: 2 },
+    { name: 'Focused', icon: 'brain',                  color: Palette.primaryLight,    value: 8 },
+    { name: 'Tired',   icon: 'sleep',                  color: Palette.border,          value: 2 },
   ];
 
   // On mount
@@ -87,10 +94,9 @@ export default function HomeScreen() {
     try {
       const user = auth.currentUser;
       if (!user) return;
-
       setLoading(true);
 
-      // 1) Fetch user profile data
+      // 1) Fetch user profile
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       if (userDoc.exists()) {
         setUserName(userDoc.data().displayName || user.email?.split('@')[0] || '');
@@ -110,7 +116,7 @@ export default function HomeScreen() {
         setCurrentMood(moodSnapshot.docs[0].data().rating);
       }
 
-      // 3) Fetch recent activities (limit 3, ordered desc by timestamp)
+      // 3) Fetch recent activities
       const activitiesQuery = query(
         collection(db, 'activities'),
         where('userId', '==', user.uid),
@@ -130,7 +136,7 @@ export default function HomeScreen() {
       });
       setRecentActivities(activities);
 
-      // 4) Fetch mood history for the last 7 days
+      // 4) Fetch mood history
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
       const weeklyMoodQuery = query(
@@ -158,7 +164,7 @@ export default function HomeScreen() {
         datasets: [{ data: averagedData, color: () => Palette.primary }]
       });
 
-      // 5) Calculate user streak 
+      // 5) Calculate user streak
       const streak = await calculateStreak(user.uid);
 
       // 6) Calculate monthly completion & average mood
@@ -166,12 +172,12 @@ export default function HomeScreen() {
       const avgMood = await calculateAverageMood();
 
       setStats({
-        streak: streak,
+        streak,
         monthlyCompletion: `${monthlyCompletion}%`,
         avgMood: avgMood.toFixed(1)
       });
 
-      // 7) Fetch daily tip from wellnessTips (random)
+      // 7) Fetch daily tip
       const tipsRef = collection(db, 'wellnessTips');
       const tipsSnapshot = await getDocs(tipsRef);
       if (!tipsSnapshot.empty) {
@@ -186,8 +192,7 @@ export default function HomeScreen() {
     }
   };
 
-  // ------------------------------- Streak Logic -------------------------------
-  // This function is the same logic you used in your ProgressScreen
+  // Streak logic
   const calculateStreak = async (uid) => {
     try {
       const today = new Date();
@@ -204,12 +209,8 @@ export default function HomeScreen() {
           where('timestamp', '<', new Date(currentDate.getTime() + 86400000))
         );
         const snapshot = await getDocs(dateQuery);
-        if (snapshot.empty) {
-          // If we find no activity on this day, break the streak
-          break;
-        }
+        if (snapshot.empty) break; // break streak if no activity found
         streak++;
-        // Move currentDate one day earlier
         currentDate.setDate(currentDate.getDate() - 1);
       }
       return streak;
@@ -219,41 +220,43 @@ export default function HomeScreen() {
     }
   };
 
-  // ------------------------------ Helpers/Handlers ------------------------------
+  // Helpers/handlers
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      navigation.replace('Login'); // Replace with your login screen name
+      navigation.replace('Login');
     } catch (error) {
       console.error("Error signing out:", error);
     }
   };
 
   const getActivityIcon = (type) => {
-    switch(type) {
-      case 'journal': return 'notebook-edit-outline';
-      case 'breathing': return 'weather-windy';
-      case 'cbt': return 'brain';
-      case 'grounding': return 'earth';
-      default: return 'checkbox-marked-circle-outline';
+    switch (type) {
+      case 'journal':    return 'notebook-edit-outline';
+      case 'breathing':  return 'weather-windy';
+      case 'cbt':        return 'brain';
+      case 'grounding':  return 'earth';
+      default:           return 'checkbox-marked-circle-outline';
     }
   };
+
   const getActivityLabel = (type) => {
-    switch(type) {
-      case 'journal': return 'Journal Entry';
-      case 'breathing': return 'Breathing Session';
-      case 'cbt': return 'CBT Exercise';
-      case 'grounding': return 'Grounding Session';
-      default: return 'Activity';
+    switch (type) {
+      case 'journal':    return 'Journal Entry';
+      case 'breathing':  return 'Breathing Session';
+      case 'cbt':        return 'CBT Exercise';
+      case 'grounding':  return 'Grounding Session';
+      default:           return 'Activity';
     }
   };
+
   const getActivityColor = (type) => {
-    switch(type) {
-      case 'journal': return '#7986CB';
-      case 'breathing': return '#4DB6AC';
-      case 'cbt': return '#BA68C8';
-      case 'grounding': return '#64B5F6';
-      default: return '#9E9E9E';
+    switch (type) {
+      case 'journal':    return '#7986CB';
+      case 'breathing':  return '#4DB6AC';
+      case 'cbt':        return '#BA68C8';
+      case 'grounding':  return '#64B5F6';
+      default:           return '#9E9E9E';
     }
   };
 
@@ -338,14 +341,13 @@ export default function HomeScreen() {
         timestamp: new Date()
       });
 
-      // Re-fetch data to update UI
+      // Re-fetch
       fetchUserData();
     } catch (error) {
       console.error("Error saving mood:", error);
     }
   };
 
-  // Greeting helper
   const getTimeBasedGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return 'Good morning';
@@ -353,83 +355,7 @@ export default function HomeScreen() {
     return 'Good evening';
   };
 
-  // ------------------------------ UI Components ------------------------------
-  // QuickStat component
-  const QuickStat = ({ icon, value, label }) => (
-    <View style={styles.quickStat}>
-      <MaterialCommunityIcons name={icon} size={24} color="#009688" />
-      <Text style={styles.quickStatValue}>{value}</Text>
-      <Text style={styles.quickStatLabel}>{label}</Text>
-    </View>
-  );
 
-  // MoodCard component
-  const MoodCard = ({ item, selected, onSelect }) => (
-    <TouchableOpacity
-      style={[
-        styles.moodCard,
-        { backgroundColor: item.color },
-        selected && styles.selectedMood,
-      ]}
-      onPress={onSelect}
-      activeOpacity={0.8}
-    >
-      <MaterialCommunityIcons 
-        name={item.icon} 
-        size={30} 
-        color="#fff" 
-      />
-      <Text style={styles.moodName}>{item.name}</Text>
-    </TouchableOpacity>
-  );
-
-  // Simple bar chart for mood data
-  const MiniLineChart = ({ data }) => (
-    <View style={styles.chartContainer}>
-      {data.datasets[0].data.map((value, index) => {
-        const barHeight = typeof value === 'number' ? value * 10 : 0;
-        return (
-          <View 
-            key={index} 
-            style={[
-              styles.chartBar, 
-              { 
-                height: barHeight,
-                backgroundColor: data.datasets[0].color(),
-              }
-            ]}
-          >
-            <Text style={styles.chartLabel}>
-              {data.labels[index]}
-            </Text>
-          </View>
-        );
-      })}
-    </View>
-  );
-
-  // QuickAction component
-  const QuickAction = ({ icon, label, onPress }) => (
-    <TouchableOpacity style={styles.quickAction} onPress={onPress}>
-      <View style={styles.quickActionIcon}>
-        <MaterialCommunityIcons name={icon} size={24} color="#fff"/>
-      </View>
-      <Text style={styles.quickActionLabel}>{label}</Text>
-    </TouchableOpacity>
-  );
-
-  // ActivityItem component
-  const ActivityItem = ({ icon, label, value, color }) => (
-    <View style={styles.activityItem}>
-      <View style={[styles.activityIconContainer, { backgroundColor: color + '20' }]}>
-        <MaterialCommunityIcons name={icon} size={24} color={color} />
-      </View>
-      <Text style={styles.activityLabel}>{label}</Text>
-      <Text style={styles.activityValue}>{value}</Text>
-    </View>
-  );
-
-  // ------------------------------ Render ------------------------------
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -438,7 +364,6 @@ export default function HomeScreen() {
       </View>
     );
   }
-
   return (
     <ScrollView
       style={styles.container}
@@ -456,77 +381,78 @@ export default function HomeScreen() {
       <Animated.View 
         style={{
           opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }]
+          transform: [{ translateY: slideAnim }],
         }}
       >
-        {/* Header with personalized greeting */}
+        {/* Header */}
         <View style={styles.header}>
-          <View>
+          <View style={styles.headerTextContainer}>
             <Text style={styles.greeting}>
               {getTimeBasedGreeting()}, {userName || 'there'}!
             </Text>
             <Text style={styles.headerTitle}>MINDFUL</Text>
           </View>
 
-          <TouchableOpacity 
-            style={styles.logoutButton}
-            onPress={handleLogout}
-          >
-            <MaterialCommunityIcons name="logout" size={24} color={Palette.textLight} />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.profileButton}
-            onPress={() => navigation.navigate('Profile')}
-          >
-            <MaterialCommunityIcons name="account-circle" size={36} color={Palette.textLight} />
-          </TouchableOpacity>
+          <View style={styles.headerIconsContainer}>
+            <TouchableOpacity 
+              style={styles.profileButton}
+              onPress={() => navigation.navigate('Profile')}
+            >
+              <MaterialCommunityIcons name="account-circle" size={28} color={Palette.primaryDark} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+              <MaterialCommunityIcons name="logout" size={24} color={Palette.primaryDark} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Quick Actions */}
-        <View style={styles.quickActions}>
-          <QuickAction 
-            icon="meditation" 
-            label="Breathing" 
-            onPress={() => navigation.navigate('Breathing')} 
-          />
-          <QuickAction 
-            icon="notebook-edit" 
-            label="Journal" 
-            onPress={() => navigation.navigate('Journal')} 
-          />
-          <QuickAction 
-            icon="brain" 
-            label="CBT" 
-            onPress={() => navigation.navigate('CBT')} 
-          />
+        <View style={styles.quickActionsContainer}>
+          <Text style={styles.sectionHeader}>Quick Actions</Text>
+          <View style={styles.quickActions}>
+            <QuickAction 
+              icon="meditation" 
+              label="Breathing" 
+              onPress={() => navigation.navigate('Breathing')} 
+              style={styles.quickActionItem}
+            />
+            <QuickAction 
+              icon="notebook-edit" 
+              label="Journal" 
+              onPress={() => navigation.navigate('Journal')} 
+              style={styles.quickActionItem}
+            />
+            <QuickAction 
+              icon="brain" 
+              label="CBT" 
+              onPress={() => navigation.navigate('CBT')} 
+              style={styles.quickActionItem}
+            />
+          </View>
         </View>
 
-        {/* Daily Check-In Reminder (only if no mood selected) */}
+        {/* Daily Check-In Reminder */}
         {!currentMood && (
           <View style={styles.checkinReminder}>
-            <Text style={styles.checkinTitle}>Daily Check-In</Text>
-            <Text style={styles.checkinText}>
-              Share how you're feeling today to track your progress
-            </Text>
+            <MaterialCommunityIcons name="bell-ring" size={20} color={Palette.white} />
+            <View style={styles.checkinTextContainer}>
+              <Text style={styles.checkinTitle}>Daily Check-In</Text>
+              <Text style={styles.checkinText}>
+                How are you feeling today? Share to track your progress.
+              </Text>
+            </View>
           </View>
         )}
 
-        {/* Mood Tracking Section */}
-        <LinearGradient
-          colors={[Palette.background, Palette.primaryLight]}
-          style={styles.moodSection}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <Text style={styles.sectionTitle}>Track Your Mood</Text>
-          
+        {/* Mood Tracking */}
+        <View style={styles.moodSection}>
+          <Text style={styles.sectionHeader}>Track Your Mood</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.moodScrollContainer}
           >
-            {moodOptions.map((moodItem) => (
+            {moodOptions.map(moodItem => (
               <MoodCard
                 key={moodItem.value}
                 item={moodItem}
@@ -536,68 +462,68 @@ export default function HomeScreen() {
             ))}
           </ScrollView>
 
-          {/* If mood is selected, show a button to journal */}
+          {/* If mood is selected, direct user to capture via journal */}
           {currentMood && (
             <TouchableOpacity 
               style={styles.journalButton}
               onPress={() => navigation.navigate('Journal', { mood: currentMood })}
             >
-              <LinearGradient 
-                colors={[Palette.primaryLight, Palette.primary]} 
-                style={styles.journalGradient}
-              >
+              <View style={styles.journalButtonInner}>
                 <Text style={styles.journalButtonText}>
                   {currentMood <= 3 ? "Journal About Today" : "Capture This Moment"}
                 </Text>
                 <MaterialCommunityIcons name="book-edit" size={20} color="#fff" />
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
           )}
-        </LinearGradient>
+        </View>
 
-        {/* Quick Stats (including the streak) */}
+        {/* Quick Stats */}
         {/* <View style={styles.quickStatsContainer}>
-          <QuickStat icon="fire" value={stats.streak} label="Day Streak" />
-          <QuickStat icon="calendar-check" value={stats.monthlyCompletion} label="This Month" />
-          <QuickStat icon="emoticon-happy-outline" value={stats.avgMood} label="Avg Mood" />
+          <Text style={styles.sectionHeader}>Your Stats</Text>
+          <View style={styles.statsGrid}>
+            <QuickStat 
+              icon="fire" 
+              value={stats.streak} 
+              label="Day Streak" 
+              style={styles.statItem}
+            />
+            <QuickStat 
+              icon="calendar-check" 
+              value={stats.monthlyCompletion} 
+              label="This Month" 
+              style={styles.statItem}
+            />
+            <QuickStat 
+              icon="emoticon-happy-outline" 
+              value={stats.avgMood} 
+              label="Avg Mood" 
+              style={styles.statItem}
+            />
+          </View>
         </View> */}
 
-        {/* Progress Preview */}
-        {/* <TouchableOpacity 
+        {/* Mood Trends Preview */}
+         {/* <TouchableOpacity 
           style={styles.progressPreview}
           onPress={() => navigation.navigate('Progress')}
         >
-          <Text style={styles.sectionTitleAlt}>Your Mood Trends</Text>
+          <Text style={styles.sectionHeader}>Your Mood Trends</Text>
           <MiniLineChart data={moodHistoryData} />
-          <Text style={styles.seeMoreText}>See full analysis →</Text>
+          <View style={styles.seeMoreContainer}>
+            <Text style={styles.seeMoreText}>See full analysis</Text>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={Palette.primary} />
+          </View>
         </TouchableOpacity> */}
 
-        {/* Recent Activity Preview */}
-        {/* <View style={styles.recentActivity}>
-          <Text style={styles.sectionTitleAlt}>Recent Activity</Text>
-          {recentActivities.length > 0 ? (
-            recentActivities.map(activity => (
-              <ActivityItem key={activity.id} {...activity} />
-            ))
-          ) : (
-            <Text style={styles.emptyText}>No recent activities yet</Text>
-          )}
-          <TouchableOpacity 
-            style={styles.seeMoreButton}
-            onPress={() => navigation.navigate('Progress')}
-          >
-            <Text style={styles.seeMoreText}>View All Activity →</Text>
-          </TouchableOpacity>
-        </View> */}
-
-        {/* Daily Mental Health Tip */}
+        {/* Daily Tip */}
         <View style={styles.tipCard}>
           <View style={styles.tipHeader}>
             <MaterialCommunityIcons name="lightbulb-on" size={24} color={Palette.primaryDark} />
             <Text style={styles.tipTitle}>Today's Wellness Tip</Text>
           </View>
           <Text style={styles.tipContent}>
-            {dailyTip || "“Practice the 5-4-3-2-1 grounding technique when feeling anxious…”"}
+            {dailyTip || "Practice the 5-4-3-2-1 grounding technique when feeling anxious: Name 5 things you can see, 4 you can touch, 3 you can hear, 2 you can smell, and 1 you can taste."}
           </Text>
         </View>
 
@@ -606,8 +532,10 @@ export default function HomeScreen() {
           style={styles.emergencyCard}
           onPress={() => navigation.navigate('EmergencyResources')}
         >
-          <MaterialCommunityIcons name="lifebuoy" size={24} color={Palette.white} />
-          <Text style={styles.emergencyText}>Need Immediate Help?</Text>
+          <View style={styles.emergencyContent}>
+            <MaterialCommunityIcons name="lifebuoy" size={24} color={Palette.white} />
+            <Text style={styles.emergencyText}>Need Immediate Help?</Text>
+          </View>
           <MaterialCommunityIcons name="chevron-right" size={24} color={Palette.white} />
         </TouchableOpacity>
       </Animated.View>
@@ -615,10 +543,9 @@ export default function HomeScreen() {
   );
 }
 
-////////////////////////////////////////////////////////////////////////////////
-// STYLES
-////////////////////////////////////////////////////////////////////////////////
-
+// --------------------------------------------------------------------------------
+// Enhanced Styles
+// --------------------------------------------------------------------------------
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -636,6 +563,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
   },
+  headerTextContainer: {
+    flex: 1,
+  },
+  headerIconsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   greeting: {
     fontSize: typography.body.fontSize,
     color: Palette.textLight,
@@ -650,212 +584,133 @@ const styles = StyleSheet.create({
   },
   logoutButton: {
     padding: spacing.sm,
+    marginLeft: spacing.sm,
   },
   profileButton: {
     padding: spacing.sm,
+  },
+  sectionHeader: {
+    fontSize: typography.h3.fontSize,
+    fontWeight: typography.h3.fontWeight,
+    color: Palette.primaryDark,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  quickActionsContainer: {
+    marginBottom: spacing.lg,
   },
   quickActions: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     marginHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
   },
-  quickAction: {
-    alignItems: 'center',
-    width: '30%',
-  },
-  quickActionIcon: {
-    backgroundColor: Palette.primary,
-    width: 50,
-    height: 50,
-    borderRadius: borderRadius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  quickActionLabel: {
-    fontSize: typography.small.fontSize,
-    color: Palette.textLight,
-    textAlign: 'center',
+  quickActionItem: {
+    backgroundColor: Palette.white,
+    ...shadows.low,
   },
   checkinReminder: {
-    backgroundColor: Palette.secondaryBlue,
+    backgroundColor: Palette.primary,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    ...shadows.medium,
+  },
+  checkinTextContainer: {
+    flex: 1,
+    marginLeft: spacing.md,
   },
   checkinTitle: {
     fontSize: typography.body.fontSize,
     fontWeight: typography.h2.fontWeight,
-    color: Palette.textDark,
+    color: Palette.white,
     marginBottom: spacing.xs,
   },
   checkinText: {
     fontSize: typography.caption.fontSize,
-    color: Palette.textDark,
+    color: Palette.white,
+    opacity: 0.9,
   },
   moodSection: {
+    backgroundColor: Palette.white,
     marginHorizontal: spacing.lg,
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
     ...shadows.medium,
-  },
-  sectionTitle: {
-    fontSize: typography.h3.fontSize,
-    fontWeight: typography.h3.fontWeight,
-    color: Palette.textDark,
-    marginBottom: spacing.md,
   },
   moodScrollContainer: {
     paddingRight: spacing.md,
   },
-  moodCard: {
-    width: 70,
-    height: 70,
-    borderRadius: borderRadius.lg,
-    marginRight: spacing.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...shadows.medium,
-  },
-  selectedMood: {
-    transform: [{ scale: 1.1 }],
-    ...shadows.high,
-  },
-  moodName: {
-    color: Palette.white,
-    fontWeight: typography.h3.fontWeight,
-    fontSize: typography.small.fontSize,
-    marginTop: spacing.xs,
-  },
   journalButton: {
     marginTop: spacing.md,
+    backgroundColor: Palette.primary,
+    borderRadius: borderRadius.md,
+    ...shadows.low,
   },
-  journalGradient: {
+  journalButtonInner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.md,
-    borderRadius: borderRadius.md,
   },
   journalButtonText: {
     color: Palette.white,
     fontWeight: typography.h3.fontWeight,
     marginRight: spacing.sm,
   },
-  quickStatsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
-  },
-  quickStat: {
-    alignItems: 'center',
-    backgroundColor: Palette.card,
-    padding: spacing.sm,
-    borderRadius: borderRadius.md,
-    width: '30%',
-    ...shadows.low,
-  },
-  quickStatValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Palette.primary,
-    marginTop: spacing.xs,
-  },
-  quickStatLabel: {
-    fontSize: typography.small.fontSize,
-    color: Palette.textLight,
-  },
-  progressPreview: {
-    backgroundColor: Palette.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
-    ...shadows.low,
-  },
-  sectionTitleAlt: {
-    fontSize: typography.h3.fontSize,
-    fontWeight: typography.h3.fontWeight,
-    color: Palette.primaryDark,
-    marginBottom: spacing.md,
-  },
-  chartContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    height: 120,
-    marginVertical: 10,
-  },
-  chartBar: {
-    width: 30,
-    borderTopLeftRadius: 6,
-    borderTopRightRadius: 6,
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-  },
-  chartLabel: {
-    fontSize: 10,
-    color: '#fff',
-    marginBottom: 4,
-  },
-  seeMoreText: {
-    color: Palette.primaryDark,
-    alignSelf: 'flex-end',
-    marginTop: spacing.sm,
-    fontWeight: typography.h3.fontWeight,
-  },
-  recentActivity: {
-    backgroundColor: Palette.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
-  },
-  emptyText: {
-    color: Palette.textLight,
-    textAlign: 'center',
-    marginVertical: spacing.md,
-  },
-  seeMoreButton: {
-    marginTop: spacing.sm,
-    alignSelf: 'flex-end',
-  },
-  activityItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Palette.border,
-  },
-  activityIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: spacing.sm,
+    backgroundColor: Palette.background,
   },
-  activityLabel: {
+  loadingText: {
+    marginTop: spacing.md,
+    color: Palette.textLight,
+  },
+  quickStatsContainer: {
+    marginBottom: spacing.lg,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginHorizontal: spacing.lg,
+  },
+  statItem: {
     flex: 1,
-    fontSize: typography.body.fontSize,
-    color: Palette.textMedium,
+    marginHorizontal: spacing.sm,
+    backgroundColor: Palette.white,
+    ...shadows.low,
   },
-  activityValue: {
-    fontSize: typography.body.fontSize,
-    fontWeight: typography.h2.fontWeight,
-    color: Palette.textDark,
-  },
-  tipCard: {
-    backgroundColor: Palette.card,
+  progressPreview: {
+    backgroundColor: Palette.white,
     borderRadius: borderRadius.lg,
-    padding: spacing.md,
+    padding: spacing.lg,
     marginHorizontal: spacing.lg,
     marginBottom: spacing.lg,
-    ...shadows.low,
+    ...shadows.medium,
+  },
+  seeMoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginTop: spacing.sm,
+  },
+  seeMoreText: {
+    color: Palette.primary,
+    fontWeight: typography.body.fontWeight,
+    fontSize: typography.caption.fontSize,
+  },
+  tipCard: {
+    backgroundColor: Palette.white,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+    ...shadows.medium,
   },
   tipHeader: {
     flexDirection: 'row',
@@ -882,21 +737,16 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     marginHorizontal: spacing.lg,
     ...shadows.low,
+
+  },
+  emergencyContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   emergencyText: {
     color: Palette.white,
     fontWeight: typography.h3.fontWeight,
     fontSize: typography.body.fontSize,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Palette.background,
-  },
-  loadingText: {
-    marginTop: spacing.md,
-    color: Palette.textLight,
+    marginLeft: spacing.sm,
   },
 });
-
