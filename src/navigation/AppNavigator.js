@@ -18,6 +18,7 @@ import JournalScreen from '../screens/mental-health/JournalScreen';
 import EmergencyResourcesScreen from '../screens/mental-health/EmergencyResourcesScreen';
 import SavedRecordsScreen from '../screens/mental-health/SavedRecordsScreen';
 import RecordDetailScreen from '../screens/mental-health/RecordDetailScreen';
+import ProfileScreen from '../screens/home/ProfileScreen';
 
 const AuthStack = createStackNavigator();
 const AppStack = createStackNavigator();
@@ -40,6 +41,7 @@ const MainNavigator = () => (
     <AppStack.Screen name="EmergencyResources" component={EmergencyResourcesScreen} />
     <AppStack.Screen name="SavedRecordsScreen" component={SavedRecordsScreen} />
     <AppStack.Screen name="RecordDetailScreen" component={RecordDetailScreen} />
+    <AppStack.Screen name="Profile" component={ProfileScreen} />
   </AppStack.Navigator>
 );
 
