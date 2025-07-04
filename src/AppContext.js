@@ -8,6 +8,7 @@ export const AppProvider = ({ children }) => {
   const [tests, setTests] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [pushToken, setPushToken] = useState(null);
 
   const loadTests = async () => {
     setLoading(true);
@@ -28,7 +29,7 @@ export const AppProvider = ({ children }) => {
   };
 
   return (
-    <AppContext.Provider value={{ tests, setTests, loading, error, loadTests }}>
+    <AppContext.Provider value={{ tests, setTests, loading, error, loadTests, pushToken, setPushToken }}>
       {children}
     </AppContext.Provider>
   );
