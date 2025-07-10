@@ -24,6 +24,8 @@ import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 import * as FileSystem from 'expo-file-system';
 import { Palette, spacing, typography, shadows, borderRadius } from '../../theme/colors';
+import * as LocalAuthentication from 'expo-local-authentication'; 
+import { isEnabled } from 'react-native/Libraries/Performance/Systrace';
 
 export default function JournalScreen() {
   const [journalEntries, setJournalEntries] = useState([]);
@@ -44,7 +46,12 @@ export default function JournalScreen() {
   
   // The user's typed password in a modal
   const [password, setPassword] = useState('');
-
+  const [biometricSettings, setBiometricSettings] = useState({
+    isAvailable: false,
+    types: [],
+    isEnabled: false,
+    isChecking: true
+  });
   const [isLoading, setIsLoading] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -78,14 +85,32 @@ export default function JournalScreen() {
     const loadAppData = async () => {
       try {
         const storedPassword = await SecureStore.getItemAsync('journalPassword');
+        const biometricEnabled = await SecureStore.getItemAsync('biometricEnabled');
+        
         if (storedPassword) {
           setJournalLocked(true);
           setHasPassword(true);
+          
+          // Check biometrics with loading state
+          setBiometricSettings(prev => ({...prev, isChecking: true}));
+          const biometricInfo = await checkBiometrics();
+          setBiometricSettings({
+            ...biometricInfo,
+            isEnabled: biometricEnabled === 'true',
+            isChecking: false
+          });
+          
+          // If biometric is enabled, try to authenticate immediately
+          if (biometricEnabled === 'true' && biometricInfo.isAvailable) {
+            await authenticateWithBiometrics();
+          }
         } else {
           setHasPassword(false);
+          setBiometricSettings(prev => ({...prev, isChecking: false}));
         }
       } catch (error) {
         console.log('Error loading privacy settings:', error);
+        setBiometricSettings(prev => ({...prev, isChecking: false}));
       }
       await loadJournalEntries();
     };
@@ -112,9 +137,87 @@ export default function JournalScreen() {
     }
   }, [showNewEntry]);
 
-  //---------------------------------------------------------------------------
-  // Load/Save/Remove Journal Entries
-  //---------------------------------------------------------------------------
+
+
+  const checkBiometrics = async () => {
+    try {
+      const hasBiometrics = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      
+      // Get supported types - handle cases where it might not return an array
+      let supportedTypes = [];
+      try {
+        const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
+        supportedTypes = Array.isArray(types) ? types : [];
+      } catch (error) {
+        console.log('Could not get supported auth types:', error);
+        supportedTypes = [];
+      }
+      
+      // Convert to human-readable types
+      const authTypes = supportedTypes.map(type => {
+        switch (type) {
+          case LocalAuthentication.AuthenticationType.FINGERPRINT:
+            return 'fingerprint';
+          case LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION:
+            return 'face';
+          default:
+            return 'unknown';
+        }
+      }).filter(Boolean); // Remove any undefined/null values
+      
+      return {
+        isAvailable: hasBiometrics && isEnrolled,
+        types: authTypes
+      };
+    } catch (error) {
+      console.error('Biometric check failed:', error);
+      return { isAvailable: false, types: [] };
+    }
+  };
+
+  const authenticateWithBiometrics = async () => {
+    try {
+      // First check if biometrics are still available
+      const biometricInfo = await checkBiometrics();
+      if (!biometricInfo.isAvailable) {
+        Alert.alert(
+          'Biometrics Unavailable',
+          'Biometric authentication is no longer available. Please use your password.',
+          [{ text: 'OK', onPress: () => {
+            setPasswordModalType('UNLOCK_JOURNAL');
+            setPasswordModalVisible(true);
+          }}]
+        );
+        return;
+      }
+
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Authenticate to unlock your journal',
+        fallbackLabel: 'Enter Password',
+        disableDeviceFallback: false,
+      });
+      if (result.success) {
+        setJournalLocked(false);
+        setPasswordModalVisible(false);
+      } else {
+        setPasswordModalType('UNLOCK_JOURNAL');
+        setPasswordModalVisible(true);
+      }
+    } catch (error) {
+      console.error('Biometric authentication failed:', error);
+      Alert.alert(
+        'Authentication Error',
+        'Could not authenticate with biometrics. Please use your password.',
+        [{ text: 'OK', onPress: () => {
+          setPasswordModalType('UNLOCK_JOURNAL');
+          setPasswordModalVisible(true);
+        }}]
+      );
+    }
+  };
+ 
+
   const loadJournalEntries = async () => {
     try {
       const localEntries = await AsyncStorage.getItem('journalEntries');
@@ -450,10 +553,43 @@ Shared from Mindful Journal App
   // behind a "journal locked" overlay and force the user to unlock. 
   // For example, let's do a simple overlay if journalLocked == true.
   const renderLockedOverlay = () => {
+    if (biometricSettings.isChecking) {
+      return (
+        <View style={styles.lockOverlay}>
+          <ActivityIndicator size="large" color="#fff" />
+          <Text style={styles.loadingText}>Checking security...</Text>
+        </View>
+      );
+    }
     return (
       <View style={styles.lockOverlay}>
         <MaterialCommunityIcons name="lock" size={80} color="#fff" />
         <Text style={styles.lockOverlayText}>Journal is Locked</Text>
+        {biometricSettings.isEnabled && biometricSettings.isAvailable && biometricSettings.types.length > 0 && (
+          <TouchableOpacity
+            style={styles.biometricButton}
+            onPress={authenticateWithBiometrics}
+          >
+            <MaterialCommunityIcons
+              name={
+                biometricSettings.types.includes('fingerprint') ?
+                  'fingerprint' :
+                  biometricSettings.types.includes('face') ?
+                    'face-recognition' :
+                    'lock'
+              }
+              size={24}
+              color={Palette.white}
+            />
+            <Text style={styles.biometricButtonText}>
+              {biometricSettings.types.includes('fingerprint') ?
+                'Unlock with Fingerprint' :
+                biometricSettings.types.includes('face') ?
+                  'Unlock with Face ID' :
+                  'Unlock with Biometrics'}
+            </Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={styles.lockOverlayButton}
           onPress={() => {
@@ -461,7 +597,7 @@ Shared from Mindful Journal App
             setPasswordModalVisible(true);
           }}
         >
-          <Text style={styles.lockOverlayButtonText}>Unlock Journal</Text>
+          <Text style={styles.lockOverlayButtonText}>Unlock with Password</Text>
         </TouchableOpacity>
       </View>
     );
@@ -519,12 +655,45 @@ Shared from Mindful Journal App
               </TouchableOpacity>
 
               <TouchableOpacity 
+        style={[styles.privacyButton, { marginRight: spacing.sm }]}
+        onPress={async () => {
+          if (biometricSettings.isAvailable) {
+            const newValue = !biometricSettings.isEnabled;
+            await SecureStore.setItemAsync('biometricEnabled', String(newValue));
+            setBiometricSettings(prev => ({
+              ...prev,
+              isEnabled: newValue
+            }));
+            Alert.alert(
+              newValue ? 'Biometric Enabled' : 'Biometric Disabled',
+              newValue 
+                ? 'You can now unlock your journal with biometrics' 
+                : 'Journal will require password to unlock'
+            );
+          } else {
+            Alert.alert('Not Available', 'Biometric authentication is not available on this device');
+          }
+        }}
+      >
+        <MaterialCommunityIcons 
+          name={biometricSettings.isEnabled ? 'fingerprint-off' : 'fingerprint'} 
+          size={20} 
+          color={Palette.white} 
+        />
+        <Text style={styles.privacyButtonText}>
+          {biometricSettings.isEnabled ? 'Disable Biometric' : 'Enable Biometric'}
+        </Text>
+      </TouchableOpacity>
+
+
+              <TouchableOpacity 
                 style={styles.privacyButton}
                 onPress={() => removeJournalPassword()}
               >
                 <MaterialCommunityIcons name="lock" size={20} color={Palette.white} />
                 <Text style={styles.privacyButtonText}>Remove Password</Text>
               </TouchableOpacity>
+              
             </>
           )}
         </View>
@@ -706,29 +875,57 @@ Shared from Mindful Journal App
 
       {/* Password Modal */}
       <Modal
-        visible={passwordModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setPasswordModalVisible(false)}
-      >
-        <View style={styles.passwordModalContainer}>
-          <View style={styles.passwordModalContent}>
- 
+  visible={passwordModalVisible}
+  transparent={true}
+  animationType="fade"
+  onRequestClose={() => setPasswordModalVisible(false)}
+>
+  <View style={styles.passwordModalContainer}>
+    <View style={styles.passwordModalContent}>
+      <Text style={styles.passwordModalTitle}>
+        {passwordModalType === 'UNLOCK_JOURNAL' && 'Unlock Journal'}
+        {passwordModalType === 'SET_PASSWORD' && 'Set Journal Password'}
+        {passwordModalType === 'CHANGE_PASSWORD' && 'Change Journal Password'}
+      </Text>
 
-            <Text style={styles.passwordModalTitle}>
-              {passwordModalType === 'UNLOCK_JOURNAL' && 'Unlock Journal'}
-              {passwordModalType === 'SET_PASSWORD' && 'Set Journal Password'}
-              {passwordModalType === 'CHANGE_PASSWORD' && 'Change Journal Password'}
-            </Text>
-
-            <TextInput
-              style={styles.passwordInput}
-              placeholder="Enter password"
-              secureTextEntry={true}
-              value={password}
-              onChangeText={setPassword}
-              autoFocus={true}
+      {passwordModalType === 'UNLOCK_JOURNAL' &&
+        !biometricSettings.isChecking &&
+        biometricSettings.isEnabled &&
+        biometricSettings.types.length > 0 && (
+          <TouchableOpacity
+            style={styles.biometricButton}
+            onPress={authenticateWithBiometrics}
+          >
+            <MaterialCommunityIcons
+              name={
+                biometricSettings.types.includes('fingerprint') ?
+                  'fingerprint' :
+                  biometricSettings.types.includes('face') ?
+                    'face-recognition' :
+                    'lock'
+              }
+              size={24}
+              color={Palette.white}
             />
+            <Text style={styles.biometricButtonText}>
+              {biometricSettings.types.includes('fingerprint') ?
+                'Unlock with Fingerprint' :
+                biometricSettings.types.includes('face') ?
+                  'Unlock with Face ID' :
+                  'Unlock with Biometrics'}
+            </Text>
+          </TouchableOpacity>
+        )}
+
+      <TextInput
+        style={styles.passwordInput}
+        placeholder="Enter password"
+        secureTextEntry={true}
+        value={password}
+        onChangeText={setPassword}
+        autoFocus={!biometricSettings.isEnabled}
+      />
+
 
             {/* A short informative message depending on context */}
             {passwordModalType === 'UNLOCK_JOURNAL' && (
@@ -805,6 +1002,26 @@ const styles = StyleSheet.create({
     color: Palette.white,
     fontSize: typography.h3.fontSize,
     fontWeight: typography.h3.fontWeight,
+  },
+  loadingText: {
+    color: Palette.white,
+    fontSize: typography.body.fontSize,
+    marginTop: spacing.md,
+  },
+  biometricButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Palette.secondaryPurple,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    marginTop: spacing.lg,
+  },
+  biometricButtonText: {
+    color: Palette.white,
+    fontSize: typography.body.fontSize,
+    fontWeight: typography.h3.fontWeight,
+    marginLeft: spacing.sm,
   },
 
   header: {
