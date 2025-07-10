@@ -242,10 +242,20 @@ export default function JournalScreen() {
     }
   };
 
+  function validatePassword(password) {
+    // Correct regex pattern:
+    // At least 6 characters, with at least one digit and one special character
+    const regex = /^(?=.*[0-9])(?=.*[!@#$%^&*])[A-Za-z0-9!@#$%^&*]{6,}$/;
+    return regex.test(password);
+  }
+  
+
   const setJournalPassword = async () => {
-    if (password.length < 4) {
-      Alert.alert('Weak Password', 'Please use at least 4 characters.');
-      return;
+    if (!validatePassword(password)) {
+      Alert.alert(
+        'Weak Password',
+        'Password must be at least 6 characters long and include a number and special character.'
+        );      return;
     }
     try {
       await SecureStore.setItemAsync('journalPassword', password);
@@ -260,8 +270,11 @@ export default function JournalScreen() {
   };
 
   const changeJournalPassword = async () => {
-    if (password.length < 4) {
-      Alert.alert('Weak Password', 'Please use at least 4 characters.');
+    if (!validatePassword(password)) {
+      Alert.alert(
+        'Weak Password',
+        'Password must be at least 6 characters long and include a number and special character.'
+        );
       return;
     }
     try {

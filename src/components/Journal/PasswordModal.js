@@ -29,7 +29,7 @@ export default function PasswordModal({
 
   const noteText = {
     UNLOCK_JOURNAL: 'Enter your existing journal password to unlock your entries.',
-    SET_PASSWORD: 'Set a new password to protect your journal. At least 4 characters.',
+    SET_PASSWORD:"Your password must be at least 6 characters and include a number and special character.",
     CHANGE_PASSWORD: 'Enter a new password for your journal.'
   }[modalType];
 
