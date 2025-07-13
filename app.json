@@ -40,8 +40,8 @@
       "policy": "appVersion"
     },
     "plugins": [
-      "expo-font"
-     
+      "expo-font",
+      "expo-secure-store"
     ],
     "owner": "nishant2004",
     "extra": {

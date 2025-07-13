@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView,
-  Alert, Animated, ActivityIndicator
+  Alert, Animated, ActivityIndicator, AppState
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getAuth } from 'firebase/auth';
@@ -9,9 +9,15 @@ import { doc, setDoc, addDoc, getDoc, collection, query, where, getDocs, deleteD
 import { db } from '../../config/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
-import * as LocalAuthentication from 'expo-local-authentication'; 
+import * as LocalAuthentication from 'expo-local-authentication';
+import * as ScreenCapture from 'expo-screen-capture';
 import { Palette, spacing, typography, shadows, borderRadius } from '../../theme/colors';
 
+// Import utilities
+import { encryptionUtils } from '../../utils/encryption';
+import { passwordUtils } from '../../utils/passwordUtils';
+
+// Import components
 import LockOverlay from '../../components/Journal/LockOverlay';
 import PasswordModal from '../../components/Journal/PasswordModal';
 import NewEntryModal from '../../components/Journal/NewEntryModal';
@@ -19,20 +25,15 @@ import ViewEntryModal from '../../components/Journal/ViewEntryModal';
 import JournalEntryList from '../../components/Journal/JournalEntryList';
 
 export default function JournalScreen() {
-  // All the state variables for controlling modals and data
+  // Existing state variables
   const [journalEntries, setJournalEntries] = useState([]);
   const [selectedEntry, setSelectedEntry] = useState(null);
-
   const [showNewEntry, setShowNewEntry] = useState(false);
-
-  // Privacy/password state
   const [journalLocked, setJournalLocked] = useState(false);
   const [hasPassword, setHasPassword] = useState(false);
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
   const [passwordModalType, setPasswordModalType] = useState('UNLOCK_JOURNAL');
   const [password, setPassword] = useState('');
-  
-  // Biometric
   const [biometricSettings, setBiometricSettings] = useState({
     isAvailable: false,
     types: [],
@@ -40,12 +41,18 @@ export default function JournalScreen() {
     isChecking: true
   });
   const [resetEmailModalVisible, setResetEmailModalVisible] = useState(false);
-const [resetEmail, setResetEmail] = useState('');
-
-  // For handling shared loading states (e.g. for PDF generation, etc.)
+  const [resetEmail, setResetEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  // New security state variables
+  const [lastActivityTime, setLastActivityTime] = useState(Date.now());
+  const [appState, setAppState] = useState(AppState.currentState);
+  const activityTimeoutRef = useRef(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  // Security constants
+  const AUTO_LOCK_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+  const BACKGROUND_LOCK_TIMEOUT = 30 * 1000; // 30 seconds
 
   // ---------------------------------------------------------------------------
   // Effects
@@ -60,7 +67,6 @@ const [resetEmail, setResetEmail] = useState('');
           setJournalLocked(true);
           setHasPassword(true);
           
-          // Check biometrics
           setBiometricSettings(prev => ({...prev, isChecking: true}));
           const biometricInfo = await checkBiometrics();
           setBiometricSettings({
@@ -86,6 +92,69 @@ const [resetEmail, setResetEmail] = useState('');
     loadAppData();
   }, []);
 
+  // Auto-lock timer
+  useEffect(() => {
+    const checkInactivity = () => {
+      const now = Date.now();
+      if (now - lastActivityTime > AUTO_LOCK_TIMEOUT && !journalLocked && hasPassword) {
+        setJournalLocked(true);
+        Alert.alert('Session Expired', 'Journal locked due to inactivity');
+      }
+    };
+
+    activityTimeoutRef.current = setInterval(checkInactivity, 30000);
+
+    return () => {
+      if (activityTimeoutRef.current) {
+        clearInterval(activityTimeoutRef.current);
+      }
+    };
+  }, [lastActivityTime, journalLocked, hasPassword]);
+
+  // App state handler for background locking
+  useEffect(() => {
+    let backgroundTime = null;
+
+    const handleAppStateChange = (nextAppState) => {
+      if (appState.match(/inactive|background/) && nextAppState === 'active') {
+        if (backgroundTime && hasPassword) {
+          const backgroundDuration = Date.now() - backgroundTime;
+          if (backgroundDuration > BACKGROUND_LOCK_TIMEOUT) {
+            setJournalLocked(true);
+          }
+        }
+        backgroundTime = null;
+      } else if (nextAppState.match(/inactive|background/)) {
+        backgroundTime = Date.now();
+      }
+      setAppState(nextAppState);
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    return () => {
+      subscription.remove();
+    };
+  }, [appState, hasPassword]);
+
+  // Screenshot prevention
+  useEffect(() => {
+    const preventScreenshots = async () => {
+      if (!journalLocked && hasPassword) {
+        await ScreenCapture.preventScreenCaptureAsync();
+      } else {
+        await ScreenCapture.allowScreenCaptureAsync();
+      }
+    };
+
+    preventScreenshots();
+
+    return () => {
+      ScreenCapture.allowScreenCaptureAsync();
+    };
+  }, [journalLocked, hasPassword]);
+
+  // Animation effect
   useEffect(() => {
     Animated.stagger(100,
       journalEntries.map(() =>
@@ -96,6 +165,27 @@ const [resetEmail, setResetEmail] = useState('');
       )
     ).start();
   }, [journalEntries, fadeAnim]);
+
+  // ---------------------------------------------------------------------------
+  // Activity Tracking
+  // ---------------------------------------------------------------------------
+  const trackActivity = () => {
+    setLastActivityTime(Date.now());
+  };
+
+  const ActivityTracker = ({ children, onPress, ...props }) => {
+    return (
+      <TouchableOpacity
+        onPress={() => {
+          trackActivity();
+          if (onPress) onPress();
+        }}
+        {...props}
+      >
+        {children}
+      </TouchableOpacity>
+    );
+  };
 
   // ---------------------------------------------------------------------------
   // Biometrics
@@ -134,32 +224,6 @@ const [resetEmail, setResetEmail] = useState('');
     }
   };
 
-  const handleForgotPassword = () => {
-    setPasswordModalVisible(false);
-    setResetEmailModalVisible(true);
-  };
-  
-  // Add this function to send password reset email
-  const sendPasswordResetEmail = async () => {
-    try {
-      const auth = getAuth();
-      await sendPasswordResetEmail(auth, resetEmail);
-      Alert.alert(
-        'Email Sent',
-        'A password reset link has been sent to your email address.'
-      );
-      setResetEmailModalVisible(false);
-      setResetEmail('');
-    } catch (error) {
-      console.error('Error sending reset email:', error);
-      Alert.alert(
-        'Error',
-        error.message || 'Failed to send password reset email. Please try again.'
-      );
-    }
-  };
-  
-
   const authenticateWithBiometrics = async () => {
     try {
       const biometricInfo = await checkBiometrics();
@@ -183,6 +247,7 @@ const [resetEmail, setResetEmail] = useState('');
       if (result.success) {
         setJournalLocked(false);
         setPasswordModalVisible(false);
+        trackActivity();
       } else {
         setPasswordModalType('UNLOCK_JOURNAL');
         setPasswordModalVisible(true);
@@ -201,7 +266,7 @@ const [resetEmail, setResetEmail] = useState('');
   };
 
   // ---------------------------------------------------------------------------
-  // Loading Entries Functions
+  // Loading Entries with Encryption
   // ---------------------------------------------------------------------------
   const loadJournalEntries = async () => {
     try {
@@ -209,31 +274,42 @@ const [resetEmail, setResetEmail] = useState('');
       let parsedLocalEntries = [];
       if (localEntries) {
         parsedLocalEntries = JSON.parse(localEntries);
-        setJournalEntries(parsedLocalEntries);
+        // Decrypt entries
+        const decryptedEntries = await Promise.all(
+          parsedLocalEntries.map(entry => 
+            entry.encrypted ? encryptionUtils.decryptEntry(entry) : entry
+          )
+        );
+        setJournalEntries(decryptedEntries);
       }
       
       const auth = getAuth();
       if (auth.currentUser) {
         const q = query(collection(db, "journals"), where("userId", "==", auth.currentUser.uid));
         const querySnapshot = await getDocs(q);
-        const firebaseEntries = querySnapshot.docs.map(docItem => {
-          const data = docItem.data();
-          let dateValue;
-          if (data.date && typeof data.date.toDate === 'function') {
-            dateValue = data.date.toDate().toISOString();
-          } else if (data.date) {
-            dateValue = data.date;
-          } else {
-            dateValue = new Date().toISOString();
-          }
-          return {
-            id: docItem.id,
-            ...data,
-            date: dateValue
-          };
-        });
+        const firebaseEntries = await Promise.all(
+          querySnapshot.docs.map(async (docItem) => {
+            const data = docItem.data();
+            let dateValue;
+            if (data.date && typeof data.date.toDate === 'function') {
+              dateValue = data.date.toDate().toISOString();
+            } else if (data.date) {
+              dateValue = data.date;
+            } else {
+              dateValue = new Date().toISOString();
+            }
+            
+            const entry = {
+              id: docItem.id,
+              ...data,
+              date: dateValue
+            };
+            
+            // Decrypt if encrypted
+            return entry.encrypted ? await encryptionUtils.decryptEntry(entry) : entry;
+          })
+        );
         
-        // Merge local and Firebase entries, removing duplicates
         const mergedEntries = [
           ...firebaseEntries, 
           ...parsedLocalEntries
@@ -243,7 +319,12 @@ const [resetEmail, setResetEmail] = useState('');
          .sort((a,b) => new Date(b.date) - new Date(a.date));
         
         setJournalEntries(mergedEntries);
-        await AsyncStorage.setItem('journalEntries', JSON.stringify(mergedEntries));
+        
+        // Encrypt before storing locally
+        const encryptedForStorage = await Promise.all(
+          mergedEntries.map(entry => encryptionUtils.encryptEntry(entry))
+        );
+        await AsyncStorage.setItem('journalEntries', JSON.stringify(encryptedForStorage));
       }
     } catch (error) {
       console.error("Error loading entries:", error);
@@ -251,7 +332,7 @@ const [resetEmail, setResetEmail] = useState('');
   };
 
   // ---------------------------------------------------------------------------
-  // Password & Lock
+  // Password & Lock Functions
   // ---------------------------------------------------------------------------
   const unlockJournal = async () => {
     try {
@@ -260,6 +341,7 @@ const [resetEmail, setResetEmail] = useState('');
         setJournalLocked(false);
         setPasswordModalVisible(false);
         setPassword('');
+        trackActivity();
         Alert.alert('Unlocked', 'Your journal is now unlocked.');
       } else {
         Alert.alert('Incorrect Password', 'Please try again.');
@@ -270,20 +352,16 @@ const [resetEmail, setResetEmail] = useState('');
     }
   };
 
-  function validatePassword(password) {
-
-    const regex = /^(?=.*[0-9])(?=.*[!@#$%^&*])[A-Za-z0-9!@#$%^&*]{6,}$/;
-    return regex.test(password);
-  }
-  
-
   const setJournalPassword = async () => {
-    if (!validatePassword(password)) {
+    const validation = passwordUtils.validatePassword(password);
+    if (!validation.isValid) {
       Alert.alert(
         'Weak Password',
-        'Password must be at least 6 characters long and include a number and special character.'
-        );      return;
+        `Password requirements:\n${validation.errors.join('\n')}`
+      );
+      return;
     }
+    
     try {
       await SecureStore.setItemAsync('journalPassword', password);
       setJournalLocked(true);
@@ -297,13 +375,15 @@ const [resetEmail, setResetEmail] = useState('');
   };
 
   const changeJournalPassword = async () => {
-    if (!validatePassword(password)) {
+    const validation = passwordUtils.validatePassword(password);
+    if (!validation.isValid) {
       Alert.alert(
         'Weak Password',
-        'Password must be at least 6 characters long and include a number and special character.'
-        );
+        `Password requirements:\n${validation.errors.join('\n')}`
+      );
       return;
     }
+    
     try {
       await SecureStore.setItemAsync('journalPassword', password);
       setHasPassword(true);
@@ -316,14 +396,32 @@ const [resetEmail, setResetEmail] = useState('');
   };
 
   const removeJournalPassword = async () => {
-    try {
-      await SecureStore.deleteItemAsync('journalPassword');
-      setJournalLocked(false);
-      setHasPassword(false);
-      Alert.alert('Success', 'Journal password removed.');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to remove password. Please try again.');
-    }
+    Alert.alert(
+      'Remove Password',
+      'Are you sure you want to remove the journal password? This will make your journal accessible without authentication.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await SecureStore.deleteItemAsync('journalPassword');
+              await SecureStore.deleteItemAsync('biometricEnabled');
+              setJournalLocked(false);
+              setHasPassword(false);
+              setBiometricSettings(prev => ({ ...prev, isEnabled: false }));
+              Alert.alert('Success', 'Journal password removed.');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to remove password. Please try again.');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const onPasswordModalConfirm = () => {
@@ -343,7 +441,7 @@ const [resetEmail, setResetEmail] = useState('');
   };
 
   // ---------------------------------------------------------------------------
-  // Handlers for toggling biometric
+  // Handlers
   // ---------------------------------------------------------------------------
   const handleToggleBiometric = async () => {
     if (biometricSettings.isAvailable) {
@@ -362,6 +460,35 @@ const [resetEmail, setResetEmail] = useState('');
     } else {
       Alert.alert('Not Available', 'Biometric authentication is not available on this device');
     }
+  };
+
+  const handleForgotPassword = () => {
+    setPasswordModalVisible(false);
+    setResetEmailModalVisible(true);
+  };
+
+  const sendPasswordResetEmail = async () => {
+    try {
+      const auth = getAuth();
+      await sendPasswordResetEmail(auth, resetEmail);
+      Alert.alert(
+        'Email Sent',
+        'A password reset link has been sent to your email address.'
+      );
+      setResetEmailModalVisible(false);
+      setResetEmail('');
+    } catch (error) {
+      console.error('Error sending reset email:', error);
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to send password reset email. Please try again.'
+      );
+    }
+  };
+
+  const openEntry = (entry) => {
+    trackActivity();
+    setSelectedEntry(entry);
   };
 
   // ---------------------------------------------------------------------------
@@ -391,10 +518,6 @@ const [resetEmail, setResetEmail] = useState('');
     );
   };
 
-  const openEntry = (entry) => {
-    setSelectedEntry(entry);
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       {journalLocked && renderLockedOverlay()}
@@ -403,72 +526,71 @@ const [resetEmail, setResetEmail] = useState('');
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <Text style={styles.title}>My Journal</Text>
-          <TouchableOpacity 
+          <ActivityTracker 
             style={styles.newEntryHeaderButton}
             onPress={() => setShowNewEntry(true)}
             disabled={journalLocked}
           >
             <MaterialCommunityIcons name="plus" size={24} color={Palette.white} />
             <Text style={styles.newEntryHeaderButtonText}>New</Text>
-          </TouchableOpacity>
+          </ActivityTracker>
         </View>
         <Text style={styles.subtitle}>A space for your thoughts, feelings, and reflections.</Text>
         
         {/* PRIVACY BUTTONS */}
-      
-<ScrollView 
-  horizontal
-  showsHorizontalScrollIndicator={false}
-  contentContainerStyle={styles.privacyContainer}
->
-  {!hasPassword ? (
-    <TouchableOpacity 
-      style={styles.privacyButton}
-      onPress={() => {
-        setPasswordModalType('SET_PASSWORD');
-        setPasswordModalVisible(true);
-      }}
-    >
-      <MaterialCommunityIcons name="lock-open" size={20} color={Palette.white} />
-      <Text style={styles.privacyButtonText}>Set Password</Text>
-    </TouchableOpacity>
-  ) : (
-    <>
-      <TouchableOpacity 
-        style={styles.privacyButton}
-        onPress={() => {
-          setPasswordModalType('CHANGE_PASSWORD');
-          setPasswordModalVisible(true);
-        }}
-      >
-        <MaterialCommunityIcons name="lock-reset" size={20} color={Palette.white} />
-        <Text style={styles.privacyButtonText}>Change Password</Text>
-      </TouchableOpacity>
+        <ScrollView 
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.privacyContainer}
+        >
+          {!hasPassword ? (
+            <ActivityTracker 
+              style={styles.privacyButton}
+              onPress={() => {
+                setPasswordModalType('SET_PASSWORD');
+                setPasswordModalVisible(true);
+              }}
+            >
+              <MaterialCommunityIcons name="lock-open" size={20} color={Palette.white} />
+              <Text style={styles.privacyButtonText}>Set Password</Text>
+            </ActivityTracker>
+          ) : (
+            <>
+              <ActivityTracker 
+                style={styles.privacyButton}
+                onPress={() => {
+                  setPasswordModalType('CHANGE_PASSWORD');
+                  setPasswordModalVisible(true);
+                }}
+              >
+                <MaterialCommunityIcons name="lock-reset" size={20} color={Palette.white} />
+                <Text style={styles.privacyButtonText}>Change Password</Text>
+              </ActivityTracker>
 
-      <TouchableOpacity 
-        style={styles.privacyButton}
-        onPress={handleToggleBiometric}
-      >
-        <MaterialCommunityIcons 
-          name={biometricSettings.isEnabled ? 'fingerprint-off' : 'fingerprint'} 
-          size={20} 
-          color={Palette.white} 
-        />
-        <Text style={styles.privacyButtonText}>
-          {biometricSettings.isEnabled ? 'Disable Biometric' : 'Enable Biometric'}
-        </Text>
-      </TouchableOpacity>
+              <ActivityTracker 
+                style={styles.privacyButton}
+                onPress={handleToggleBiometric}
+              >
+                <MaterialCommunityIcons 
+                  name={biometricSettings.isEnabled ? 'fingerprint-off' : 'fingerprint'} 
+                  size={20} 
+                  color={Palette.white} 
+                />
+                <Text style={styles.privacyButtonText}>
+                  {biometricSettings.isEnabled ? 'Disable Biometric' : 'Enable Biometric'}
+                </Text>
+              </ActivityTracker>
 
-      <TouchableOpacity 
-        style={styles.privacyButton}
-        onPress={removeJournalPassword}
-      >
-        <MaterialCommunityIcons name="lock" size={20} color={Palette.white} />
-        <Text style={styles.privacyButtonText}>Remove Password</Text>
-      </TouchableOpacity>
-    </>
-  )}
-</ScrollView>
+              <ActivityTracker 
+                style={styles.privacyButton}
+                onPress={removeJournalPassword}
+              >
+                <MaterialCommunityIcons name="lock" size={20} color={Palette.white} />
+                <Text style={styles.privacyButtonText}>Remove Password</Text>
+              </ActivityTracker>
+            </>
+          )}
+        </ScrollView>
       </View>
       
       {/* JOURNAL ENTRIES LIST */}
@@ -477,28 +599,36 @@ const [resetEmail, setResetEmail] = useState('');
           fadeAnim={fadeAnim}
           journalEntries={journalEntries}
           onOpenEntry={openEntry}
+          trackActivity={trackActivity}
         />
       )}
 
       {/* NEW ENTRY MODAL */}
       <NewEntryModal
         visible={showNewEntry}
-        onClose={() => setShowNewEntry(false)}
+        onClose={() => {
+          trackActivity();
+          setShowNewEntry(false);
+        }}
         journalEntries={journalEntries}
         setJournalEntries={setJournalEntries}
+        encryptionUtils={encryptionUtils}
+        trackActivity={trackActivity}
       />
 
       {/* VIEW ENTRY MODAL */}
       <ViewEntryModal
         entry={selectedEntry}
         isLoading={isLoading}
-        onClose={() => setSelectedEntry(null)}
+        onClose={() => {
+          trackActivity();
+          setSelectedEntry(null);
+        }}
         onLoadingChange={setIsLoading}
         journalEntries={journalEntries}
         setJournalEntries={setJournalEntries}
+        trackActivity={trackActivity}
       />
-
-      
 
       {/* PASSWORD MODAL */}
       <PasswordModal
@@ -525,7 +655,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Palette.background,
   },
-  // Lock Overlay is replaced by LockOverlay.js
   header: {
     padding: spacing.lg,
     paddingBottom: spacing.sm,
@@ -573,8 +702,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
-    marginRight: spacing.sm, // Only right margin now
-    minWidth: 150, // Set a minimum width for buttons
+    marginRight: spacing.sm,
+    minWidth: 150,
     ...shadows.low,
   },
   privacyButtonText: {

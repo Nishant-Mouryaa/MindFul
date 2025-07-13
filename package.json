@@ -20,6 +20,7 @@
     "@react-navigation/native": "^6.1.18",
     "@react-navigation/stack": "^6.4.1",
     "axios": "^1.6.2",
+    "crypto-js": "^4.2.0",
     "date-fns": "^4.1.0",
     "expo": "~50.0.5",
     "expo-av": "~13.10.4",
@@ -31,9 +32,10 @@
     "expo-font": "~11.10.3",
     "expo-haptics": "~12.8.1",
     "expo-linear-gradient": "~12.7.2",
-    "expo-local-authentication": "^16.0.5",
+    "expo-local-authentication": "~13.8.0",
     "expo-notifications": "~0.27.8",
     "expo-print": "~12.8.1",
+    "expo-screen-capture": "~5.8.1",
     "expo-secure-store": "~12.8.1",
     "expo-sharing": "~11.10.0",
     "expo-status-bar": "~1.11.1",
@@ -60,7 +62,8 @@
     "react-native-svg": "^14.1.0",
     "react-native-walkthrough-tooltip": "^1.5.0",
     "react-native-web": "~0.19.10",
-    "react-native-webview": "13.6.4"
+    "react-native-webview": "13.6.4",
+    "expo-crypto": "~12.8.1"
   },
   "devDependencies": {
     "@babel/core": "^7.23.0"

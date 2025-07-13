@@ -44,52 +44,50 @@ export default function NewEntryModal({
     }
   }, [visible]);
 
-  const saveEntry = async () => {
-    if (!currentEntry.trim() && !entryTitle.trim()) {
-      Alert.alert('Empty Entry', 'Please write something or add a title before saving.');
-      return;
+// In NewEntryModal component, update the save function
+const saveEntry = async () => {
+  if (title.trim() === '' || content.trim() === '') {
+    Alert.alert('Incomplete Entry', 'Please add both a title and content.');
+    return;
+  }
+
+  try {
+    const newEntry = {
+      id: Date.now().toString(),
+      title: title.trim(),
+      content: content.trim(),
+      date: new Date().toISOString(),
+      mood,
+      tags,
+      userId: auth.currentUser?.uid || 'local',
+    };
+
+    // Encrypt the entry before saving
+    const encryptedEntry = await encryptionUtils.encryptEntry(newEntry);
+
+    // Save to Firebase if user is authenticated
+    if (auth.currentUser) {
+      await addDoc(collection(db, "journals"), encryptedEntry);
     }
-    try {
-      const auth = getAuth();
-      const user = auth.currentUser;
-      
-      if (!user) {
-        Alert.alert('Error', 'You need to be logged in to save entries');
-        return;
-      }
 
-      const newEntry = {
-        title: entryTitle.trim() || 'Untitled Entry',
-        content: currentEntry,
-        mood: mood,
-        date: new Date(),
-        userId: user.uid,
-      };
+    // Update local state with unencrypted version for display
+    const updatedEntries = [newEntry, ...journalEntries];
+    setJournalEntries(updatedEntries);
 
-      // Save locally first
-      const updatedEntries = [
-        {
-          ...newEntry,
-          id: Date.now().toString(),
-          date: new Date().toISOString()
-        },
-        ...journalEntries
-      ];
-      setJournalEntries(updatedEntries);
-      await AsyncStorage.setItem('journalEntries', JSON.stringify(updatedEntries));
+    // Save encrypted version to AsyncStorage
+    const encryptedForStorage = await Promise.all(
+      updatedEntries.map(entry => encryptionUtils.encryptEntry(entry))
+    );
+    await AsyncStorage.setItem('journalEntries', JSON.stringify(encryptedForStorage));
 
-      // Save to Firestore
-      await addDoc(collection(db, "journals"), newEntry);
-
-      setCurrentEntry('');
-      setEntryTitle('');
-      setMood(null);
-      onClose();
-      Alert.alert('Saved!', 'Your journal entry has been saved.');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to save your entry. Please try again.');
-    }
-  };
+    Alert.alert('Success', 'Journal entry saved securely!');
+    resetForm();
+    onClose();
+  } catch (error) {
+    console.error('Error saving entry:', error);
+    Alert.alert('Error', 'Failed to save entry. Please try again.');
+  }
+};
 
   return (
     <Modal
