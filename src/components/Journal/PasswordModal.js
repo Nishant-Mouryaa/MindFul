@@ -1,7 +1,13 @@
+// components/Journal/PasswordModal.js
 import React from 'react';
-import { View, Text, Modal, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import {
+  Modal, View, Text, TextInput, TouchableOpacity,
+  StyleSheet, KeyboardAvoidingView, Platform
+} from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Palette, spacing, typography, borderRadius } from '../../theme/colors';
+import PasswordStrengthIndicator from './PasswordStrengthIndicator';
+import { passwordUtils } from '../../utils/passwordUtils';
+import { Palette, spacing, typography, shadows, borderRadius } from '../../theme/colors';
 
 export default function PasswordModal({
   visible,
@@ -9,168 +15,205 @@ export default function PasswordModal({
   setPassword,
   modalType,
   isEnabled,
-  isChecking,
   onClose,
   onConfirm,
   onBiometricPress,
-  biometricTypes
+  biometricTypes = []
 }) {
-  const modalTitle = {
-    UNLOCK_JOURNAL: 'Unlock Journal',
-    SET_PASSWORD: 'Set Journal Password',
-    CHANGE_PASSWORD: 'Change Journal Password'
-  }[modalType];
+  const [showPassword, setShowPassword] = React.useState(false);
+  
+  const getModalTitle = () => {
+    switch (modalType) {
+      case 'UNLOCK_JOURNAL':
+        return 'Unlock Journal';
+      case 'SET_PASSWORD':
+        return 'Set Journal Password';
+      case 'CHANGE_PASSWORD':
+        return 'Change Password';
+      default:
+        return 'Enter Password';
+    }
+  };
 
-  const confirmLabel = {
-    UNLOCK_JOURNAL: 'Unlock',
-    SET_PASSWORD: 'Set Password',
-    CHANGE_PASSWORD: 'Change',
-  }[modalType];
+  const handleConfirm = () => {
+    if (modalType !== 'UNLOCK_JOURNAL') {
+      const validation = passwordUtils.validatePassword(password);
+      if (!validation.isValid) {
+        // The strength indicator will show the errors
+        return;
+      }
+    }
+    onConfirm();
+  };
 
-  const noteText = {
-    UNLOCK_JOURNAL: 'Enter your existing journal password to unlock your entries.',
-    SET_PASSWORD:"Your password must be at least 6 characters and include a number and special character.",
-    CHANGE_PASSWORD: 'Enter a new password for your journal.'
-  }[modalType];
+  const showStrengthIndicator = modalType === 'SET_PASSWORD' || modalType === 'CHANGE_PASSWORD';
 
   return (
     <Modal
       visible={visible}
-      transparent={true}
+      transparent
       animationType="fade"
       onRequestClose={onClose}
     >
-      <View style={styles.passwordModalContainer}>
-        <View style={styles.passwordModalContent}>
-          <Text style={styles.passwordModalTitle}>{modalTitle}</Text>
-
-          {/* Optional biometric button for UNLOCK_JOURNAL */}
-          {modalType === 'UNLOCK_JOURNAL' && !isChecking && isEnabled && biometricTypes.length > 0 && (
-            <TouchableOpacity style={styles.biometricButton} onPress={onBiometricPress}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.centeredView}
+      >
+        <View style={styles.modalView}>
+          <Text style={styles.modalTitle}>{getModalTitle()}</Text>
+          
+          <View style={styles.passwordContainer}>
+            <TextInput
+              style={styles.passwordInput}
+              placeholder="Enter password"
+              placeholderTextColor={Palette.textLight}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <TouchableOpacity
+              style={styles.eyeButton}
+              onPress={() => setShowPassword(!showPassword)}
+            >
               <MaterialCommunityIcons
-                name={
-                  biometricTypes.includes('fingerprint') ?
-                    'fingerprint' :
-                    biometricTypes.includes('face') ?
-                      'face-recognition' :
-                      'lock'
-                }
+                name={showPassword ? "eye-off" : "eye"}
                 size={24}
-                color={Palette.white}
+                color={Palette.textLight}
               />
-              <Text style={styles.biometricButtonText}>
-                {biometricTypes.includes('fingerprint') ?
-                  'Unlock with Fingerprint' :
-                  biometricTypes.includes('face') ?
-                    'Unlock with Face ID' :
-                    'Unlock with Biometrics'}
-              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {showStrengthIndicator && (
+            <PasswordStrengthIndicator password={password} />
+          )}
+
+          {modalType === 'UNLOCK_JOURNAL' && isEnabled && biometricTypes.length > 0 && (
+            <TouchableOpacity
+              style={styles.biometricButton}
+              onPress={onBiometricPress}
+            >
+              <MaterialCommunityIcons
+                name={biometricTypes.includes('face') ? 'face-recognition' : 'fingerprint'}
+                size={32}
+                color={Palette.primaryBlue}
+              />
+              <Text style={styles.biometricText}>Use Biometric</Text>
             </TouchableOpacity>
           )}
 
-          <TextInput
-            style={styles.passwordInput}
-            placeholder="Enter password"
-            secureTextEntry={true}
-            value={password}
-            onChangeText={setPassword}
-            autoFocus={true}
-          />
-
-          <Text style={styles.passwordNote}>{noteText}</Text>
-
-          <View style={styles.passwordButtonContainer}>
-            <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity
+              style={[styles.button, styles.cancelButton]}
+              onPress={onClose}
+            >
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
-
-            <TouchableOpacity style={styles.confirmButton} onPress={onConfirm}>
-              <Text style={styles.confirmButtonText}>{confirmLabel}</Text>
+            
+            <TouchableOpacity
+              style={[
+                styles.button, 
+                styles.confirmButton,
+                (!password || (showStrengthIndicator && !passwordUtils.validatePassword(password).isValid)) && 
+                styles.disabledButton
+              ]}
+              onPress={handleConfirm}
+              disabled={!password || (showStrengthIndicator && !passwordUtils.validatePassword(password).isValid)}
+            >
+              <Text style={styles.confirmButtonText}>
+                {modalType === 'UNLOCK_JOURNAL' ? 'Unlock' : 'Confirm'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  passwordModalContainer: {
+  centeredView: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
-  passwordModalContent: {
-    backgroundColor: Palette.card,
+  modalView: {
+    backgroundColor: Palette.white,
     borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    width: '85%',
+    padding: spacing.xl,
+    width: '90%',
     maxWidth: 400,
+    ...shadows.medium,
   },
-  passwordModalTitle: {
-    fontSize: typography.h3.fontSize,
-    fontWeight: typography.h3.fontWeight,
+  modalTitle: {
+    fontSize: typography.h2.fontSize,
+    fontWeight: typography.h2.fontWeight,
     color: Palette.textDark,
     marginBottom: spacing.lg,
     textAlign: 'center',
   },
-  passwordInput: {
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: Palette.border,
-    borderRadius: borderRadius.sm,
-    padding: spacing.sm,
-    fontSize: typography.body.fontSize,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
     marginBottom: spacing.sm,
   },
-  passwordNote: {
-    fontSize: typography.caption.fontSize,
-    color: Palette.textLight,
-    textAlign: 'center',
-    marginBottom: spacing.lg,
-    lineHeight: typography.caption.lineHeight,
+  passwordInput: {
+    flex: 1,
+    height: 50,
+    fontSize: typography.body.fontSize,
+    color: Palette.textDark,
   },
-  passwordButtonContainer: {
+  eyeButton: {
+    padding: spacing.sm,
+  },
+  biometricButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: spacing.lg,
+    padding: spacing.md,
+  },
+  biometricText: {
+    marginTop: spacing.sm,
+    fontSize: typography.body.fontSize,
+    color: Palette.primaryBlue,
+  },
+  buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: spacing.lg,
+  },
+  button: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
   },
   cancelButton: {
-    backgroundColor: Palette.border,
-    padding: spacing.sm,
-    borderRadius: borderRadius.sm,
-    flex: 1,
+    backgroundColor: Palette.background,
     marginRight: spacing.sm,
-    alignItems: 'center',
+  },
+  confirmButton: {
+    backgroundColor: Palette.primaryBlue,
+    marginLeft: spacing.sm,
+  },
+  disabledButton: {
+    backgroundColor: Palette.textLight,
+    opacity: 0.5,
   },
   cancelButtonText: {
     color: Palette.textDark,
-    fontWeight: typography.h2.fontWeight,
-  },
-  confirmButton: {
-    backgroundColor: Palette.secondaryBlue,
-    padding: spacing.sm,
-    borderRadius: borderRadius.sm,
-    flex: 1,
-    marginLeft: spacing.sm,
-    alignItems: 'center',
+    fontSize: typography.body.fontSize,
+    fontWeight: '500',
   },
   confirmButtonText: {
     color: Palette.white,
-    fontWeight: typography.h2.fontWeight,
-  },
-  biometricButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Palette.secondaryPurple,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    marginBottom: spacing.md,
-  },
-  biometricButtonText: {
-    color: Palette.white,
     fontSize: typography.body.fontSize,
-    fontWeight: typography.h3.fontWeight,
-    marginLeft: spacing.sm,
+    fontWeight: '500',
   },
 });

@@ -39,6 +39,8 @@ export default function JournalScreen() {
     isEnabled: false,
     isChecking: true
   });
+  const [resetEmailModalVisible, setResetEmailModalVisible] = useState(false);
+const [resetEmail, setResetEmail] = useState('');
 
   // For handling shared loading states (e.g. for PDF generation, etc.)
   const [isLoading, setIsLoading] = useState(false);
@@ -131,6 +133,32 @@ export default function JournalScreen() {
       return { isAvailable: false, types: [] };
     }
   };
+
+  const handleForgotPassword = () => {
+    setPasswordModalVisible(false);
+    setResetEmailModalVisible(true);
+  };
+  
+  // Add this function to send password reset email
+  const sendPasswordResetEmail = async () => {
+    try {
+      const auth = getAuth();
+      await sendPasswordResetEmail(auth, resetEmail);
+      Alert.alert(
+        'Email Sent',
+        'A password reset link has been sent to your email address.'
+      );
+      setResetEmailModalVisible(false);
+      setResetEmail('');
+    } catch (error) {
+      console.error('Error sending reset email:', error);
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to send password reset email. Please try again.'
+      );
+    }
+  };
+  
 
   const authenticateWithBiometrics = async () => {
     try {
@@ -243,8 +271,7 @@ export default function JournalScreen() {
   };
 
   function validatePassword(password) {
-    // Correct regex pattern:
-    // At least 6 characters, with at least one digit and one special character
+
     const regex = /^(?=.*[0-9])(?=.*[!@#$%^&*])[A-Za-z0-9!@#$%^&*]{6,}$/;
     return regex.test(password);
   }
@@ -470,6 +497,8 @@ export default function JournalScreen() {
         journalEntries={journalEntries}
         setJournalEntries={setJournalEntries}
       />
+
+      
 
       {/* PASSWORD MODAL */}
       <PasswordModal
