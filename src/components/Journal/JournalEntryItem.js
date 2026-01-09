@@ -5,14 +5,35 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Palette, spacing, typography, borderRadius, shadows } from '../../theme/colors';
 
 export default function JournalEntryItem({ entry, onPress }) {
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    const day = date.toLocaleDateString('en-US', { day: 'numeric' });
+ const formatDate = (dateInput) => {
+    let date;
+    
+    // Handle Firestore Timestamp
+    if (dateInput && typeof dateInput === 'object' && dateInput.toDate) {
+      date = dateInput.toDate();
+    }
+    // Handle ISO string
+    else if (typeof dateInput === 'string') {
+      date = new Date(dateInput);
+    }
+    // Handle regular Date object
+    else if (dateInput instanceof Date) {
+      date = dateInput;
+    }
+    // If none of the above, use current date
+    else {
+      date = new Date();
+    }
+    
+    const day = date.getDate().toString();
     const month = date.toLocaleDateString('en-US', { month: 'short' });
     return { day, month };
   };
 
   const { day, month } = formatDate(entry.date);
+
+
+
 
   const moodMap = {
     great: { label: 'Great', icon: 'emoticon-excited-outline', color: '#58D68D' },

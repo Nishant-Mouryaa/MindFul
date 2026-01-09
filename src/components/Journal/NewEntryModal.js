@@ -6,6 +6,7 @@ import { addDoc, collection } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { getAuth } from 'firebase/auth';
 import { Palette, spacing, typography, borderRadius } from '../../theme/colors';
+import { Timestamp } from 'firebase/firestore';
 
 const moodOptions = [
   { label: 'Great', value: 'great', icon: 'emoticon-excited-outline', color: '#58D68D' },
@@ -46,7 +47,7 @@ export default function NewEntryModal({
 
 // In NewEntryModal component, update the save function
 const saveEntry = async () => {
-  if (title.trim() === '' || content.trim() === '') {
+  if (entryTitle.trim() === '' || currentEntry.trim() === '') { // Changed from title/content to entryTitle/currentEntry
     Alert.alert('Incomplete Entry', 'Please add both a title and content.');
     return;
   }
@@ -54,39 +55,44 @@ const saveEntry = async () => {
   try {
     const newEntry = {
       id: Date.now().toString(),
-      title: title.trim(),
-      content: content.trim(),
-      date: new Date().toISOString(),
+      title: entryTitle.trim(), // Changed from title to entryTitle
+      content: currentEntry.trim(), // Changed from content to currentEntry
+      
+        date: Timestamp.fromDate(new Date()), // Use Firestore Timestamp
       mood,
-      tags,
-      userId: auth.currentUser?.uid || 'local',
+      tags: [], // Added empty tags array since you reference tags but don't have it in state
+      userId: getAuth().currentUser?.uid || 'local', // Added getAuth() call
     };
 
-    // Encrypt the entry before saving
-    const encryptedEntry = await encryptionUtils.encryptEntry(newEntry);
-
     // Save to Firebase if user is authenticated
-    if (auth.currentUser) {
-      await addDoc(collection(db, "journals"), encryptedEntry);
+    if (getAuth().currentUser) {
+      // Note: encryptionUtils is not imported/defined - you need to fix this
+      // For now, saving without encryption
+      await addDoc(collection(db, "journals"), newEntry);
     }
 
-    // Update local state with unencrypted version for display
+    // Update local state
     const updatedEntries = [newEntry, ...journalEntries];
     setJournalEntries(updatedEntries);
 
-    // Save encrypted version to AsyncStorage
-    const encryptedForStorage = await Promise.all(
-      updatedEntries.map(entry => encryptionUtils.encryptEntry(entry))
-    );
-    await AsyncStorage.setItem('journalEntries', JSON.stringify(encryptedForStorage));
+    // Save to AsyncStorage (without encryption for now)
+    await AsyncStorage.setItem('journalEntries', JSON.stringify(updatedEntries));
 
-    Alert.alert('Success', 'Journal entry saved securely!');
+    Alert.alert('Success', 'Journal entry saved!');
     resetForm();
     onClose();
   } catch (error) {
     console.error('Error saving entry:', error);
     Alert.alert('Error', 'Failed to save entry. Please try again.');
   }
+};
+
+// Add resetForm function
+const resetForm = () => {
+  setEntryTitle('');
+  setCurrentEntry('');
+  setMood(null);
+  setCurrentPrompt(prompts[Math.floor(Math.random() * prompts.length)]);
 };
 
   return (
