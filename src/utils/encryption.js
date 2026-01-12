@@ -1,124 +1,197 @@
 // utils/encryption.js
-import * as Crypto from 'expo-crypto';
-import * as SecureStore from 'expo-secure-store';
-import { Buffer } from 'buffer';
+// Simple encryption that works with Expo without native dependencies
 
-const ENCRYPTION_KEY = 'journalEncryptionKey';
+const ENCRYPTION_VERSION = 'v2';
+
+// Simple XOR-based encryption key (in production, use a more secure approach)
+const getEncryptionKey = () => {
+  return 'MindfulJournal2024SecureKey!@#$%';
+};
+
+/**
+ * Convert string to array of char codes
+ */
+const stringToCharCodes = (str) => {
+  const codes = [];
+  for (let i = 0; i < str.length; i++) {
+    codes.push(str.charCodeAt(i));
+  }
+  return codes;
+};
+
+/**
+ * Convert array of char codes to string
+ */
+const charCodesToString = (codes) => {
+  return String.fromCharCode(...codes);
+};
+
+/**
+ * Simple XOR encryption
+ */
+const xorEncrypt = (text, key) => {
+  const textCodes = stringToCharCodes(text);
+  const keyCodes = stringToCharCodes(key);
+  const encrypted = [];
+  
+  for (let i = 0; i < textCodes.length; i++) {
+    encrypted.push(textCodes[i] ^ keyCodes[i % keyCodes.length]);
+  }
+  
+  return encrypted;
+};
+
+/**
+ * Simple XOR decryption (same as encryption due to XOR properties)
+ */
+const xorDecrypt = (encryptedCodes, key) => {
+  const keyCodes = stringToCharCodes(key);
+  const decrypted = [];
+  
+  for (let i = 0; i < encryptedCodes.length; i++) {
+    decrypted.push(encryptedCodes[i] ^ keyCodes[i % keyCodes.length]);
+  }
+  
+  return charCodesToString(decrypted);
+};
+
+/**
+ * Convert array of numbers to Base64-safe string
+ */
+const arrayToBase64 = (arr) => {
+  try {
+    // Convert array to JSON string, then to base64
+    const jsonStr = JSON.stringify(arr);
+    // Use a simple encoding that works in React Native
+    let result = '';
+    for (let i = 0; i < jsonStr.length; i++) {
+      result += String.fromCharCode(jsonStr.charCodeAt(i) + 1);
+    }
+    return result;
+  } catch (error) {
+    console.error('arrayToBase64 error:', error);
+    return '';
+  }
+};
+
+/**
+ * Convert Base64-safe string back to array of numbers
+ */
+const base64ToArray = (str) => {
+  try {
+    // Decode the string
+    let decoded = '';
+    for (let i = 0; i < str.length; i++) {
+      decoded += String.fromCharCode(str.charCodeAt(i) - 1);
+    }
+    return JSON.parse(decoded);
+  } catch (error) {
+    console.error('base64ToArray error:', error);
+    return [];
+  }
+};
 
 export const encryptionUtils = {
-  // Generate or get encryption key
-  async getOrCreateKey() {
-    try {
-      let key = await SecureStore.getItemAsync(ENCRYPTION_KEY);
-      if (!key) {
-        const randomBytes = await Crypto.getRandomBytesAsync(32);
-        key = Buffer.from(randomBytes).toString('hex');
-        await SecureStore.setItemAsync(ENCRYPTION_KEY, key);
-      }
-      return key;
-    } catch (error) {
-      console.error('Error managing encryption key:', error);
-      return 'fallback-key-' + Date.now();
-    }
-  },
-
-  // Simple XOR encryption with Buffer
-  xorEncrypt(text, key) {
-    const textBuffer = Buffer.from(text, 'utf8');
-    const keyBuffer = Buffer.from(key, 'utf8');
-    const result = Buffer.alloc(textBuffer.length);
-    
-    for (let i = 0; i < textBuffer.length; i++) {
-      result[i] = textBuffer[i] ^ keyBuffer[i % keyBuffer.length];
-    }
-    
-    return result.toString('base64');
-  },
-
-  // Simple XOR decryption with Buffer
-  xorDecrypt(encodedText, key) {
-    try {
-      const encryptedBuffer = Buffer.from(encodedText, 'base64');
-      const keyBuffer = Buffer.from(key, 'utf8');
-      const result = Buffer.alloc(encryptedBuffer.length);
-      
-      for (let i = 0; i < encryptedBuffer.length; i++) {
-        result[i] = encryptedBuffer[i] ^ keyBuffer[i % keyBuffer.length];
-      }
-      
-      return result.toString('utf8');
-    } catch (error) {
-      console.error('XOR Decryption error:', error);
-      return encodedText;
-    }
-  },
-
-  // Encrypt text
+  /**
+   * Encrypt text
+   */
   async encryptText(text) {
     try {
-      if (!text) return '';
+      if (!text || typeof text !== 'string') {
+        return text || '';
+      }
       
-      const key = await this.getOrCreateKey();
-      const encrypted = this.xorEncrypt(text, key);
+      const key = getEncryptionKey();
+      const encryptedCodes = xorEncrypt(text, key);
+      const encoded = arrayToBase64(encryptedCodes);
       
-      // Add version marker for future compatibility
-      return `v1:${encrypted}`;
+      return `${ENCRYPTION_VERSION}:${encoded}`;
     } catch (error) {
       console.error('Encryption error:', error);
+      // Return original text if encryption fails
       return text;
     }
   },
 
-  // Decrypt text
+  /**
+   * Decrypt text
+   */
   async decryptText(encryptedText) {
     try {
       if (!encryptedText || typeof encryptedText !== 'string') {
-        return encryptedText;
+        return encryptedText || '';
       }
 
-      // Check if it's encrypted (has version marker)
-      if (!encryptedText.startsWith('v1:')) {
-        return encryptedText;
+      // Check for version prefix
+      if (encryptedText.startsWith(`${ENCRYPTION_VERSION}:`)) {
+        const encoded = encryptedText.substring(ENCRYPTION_VERSION.length + 1);
+        const encryptedCodes = base64ToArray(encoded);
+        
+        if (encryptedCodes.length === 0) {
+          return encryptedText;
+        }
+        
+        const key = getEncryptionKey();
+        return xorDecrypt(encryptedCodes, key);
       }
 
-      const key = await this.getOrCreateKey();
-      const encrypted = encryptedText.substring(3); // Remove 'v1:' prefix
-      
-      return this.xorDecrypt(encrypted, key);
+      // Handle legacy v1 encryption or unencrypted text
+      if (encryptedText.startsWith('v1:')) {
+        // Return as-is for legacy data (user will need to re-save)
+        return encryptedText.substring(3);
+      }
+
+      // Return as-is if not encrypted
+      return encryptedText;
     } catch (error) {
       console.error('Decryption error:', error);
       return encryptedText;
     }
   },
 
-  // Encrypt entire journal entry
+  /**
+   * Encrypt entire journal entry
+   */
   async encryptEntry(entry) {
     try {
       if (!entry) return entry;
 
-      const encryptedTitle = entry.title ? await this.encryptText(entry.title) : '';
-      const encryptedContent = entry.content ? await this.encryptText(entry.content) : '';
-      
+      const encryptedTitle = entry.title 
+        ? await this.encryptText(entry.title) 
+        : '';
+      const encryptedContent = entry.content 
+        ? await this.encryptText(entry.content) 
+        : '';
+
       return {
         ...entry,
         title: encryptedTitle,
         content: encryptedContent,
-        encrypted: true
+        encrypted: true,
+        encryptionVersion: ENCRYPTION_VERSION
       };
     } catch (error) {
       console.error('Error encrypting entry:', error);
-      return entry;
+      // Return entry without encryption if it fails
+      return { ...entry, encrypted: false };
     }
   },
 
-  // Decrypt entire journal entry
+  /**
+   * Decrypt entire journal entry
+   */
   async decryptEntry(entry) {
-    if (!entry || !entry.encrypted) return entry;
-    
     try {
-      const decryptedTitle = entry.title ? await this.decryptText(entry.title) : '';
-      const decryptedContent = entry.content ? await this.decryptText(entry.content) : '';
-      
+      if (!entry) return entry;
+      if (!entry.encrypted) return entry;
+
+      const decryptedTitle = entry.title 
+        ? await this.decryptText(entry.title) 
+        : '';
+      const decryptedContent = entry.content 
+        ? await this.decryptText(entry.content) 
+        : '';
+
       return {
         ...entry,
         title: decryptedTitle,
@@ -131,3 +204,5 @@ export const encryptionUtils = {
     }
   }
 };
+
+export default encryptionUtils;

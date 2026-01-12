@@ -1,31 +1,68 @@
-import React, { useState, useRef, useEffect } from 'react';
+// screens/JournalScreen.js
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView,
-  Alert, Animated, ActivityIndicator, AppState
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  SafeAreaView,
+  Alert,
+  Animated,
+  AppState,
+  FlatList,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getAuth } from 'firebase/auth';
-import { doc, setDoc, addDoc, getDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
+import {
+  doc,
+  addDoc,
+  getDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  deleteDoc,
+} from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as ScreenCapture from 'expo-screen-capture';
+import NetInfo from '@react-native-community/netinfo';
 import { Palette, spacing, typography, shadows, borderRadius } from '../../theme/colors';
 
 // Import utilities
 import { encryptionUtils } from '../../utils/encryption';
+console.log('encryptionUtils:', encryptionUtils);
+console.log('decryptEntry function:', encryptionUtils?.decryptEntry);
 import { passwordUtils } from '../../utils/passwordUtils';
 
+import { validation } from '../../utils/validation';
+import { syncQueue } from '../../utils/syncQueue';
+import { notificationUtils } from '../../utils/notifications';
+
 // Import components
+import ErrorBoundary from '../../components/ErrorBoundary';
 import LockOverlay from '../../components/Journal/LockOverlay';
 import PasswordModal from '../../components/Journal/PasswordModal';
 import NewEntryModal from '../../components/Journal/NewEntryModal';
 import ViewEntryModal from '../../components/Journal/ViewEntryModal';
-import JournalEntryList from '../../components/Journal/JournalEntryList';
+import JournalEntryItem from '../../components/Journal/JournalEntryItem';
+import SearchBar from '../../components/Journal/SearchBar';
+import FilterBar from '../../components/Journal/FilterBar';
+import MoodAnalytics from '../../components/Journal/MoodAnalytics';
+import CrisisSupport from '../../components/Journal/CrisisSupport';
+import ReminderSettings from '../../components/Journal/ReminderSettings';
+import BackupSettings from '../../components/Journal/BackupSettings';
 
-export default function JournalScreen() {
-  // Existing state variables
+// Security constants
+const AUTO_LOCK_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+const BACKGROUND_LOCK_TIMEOUT = 30 * 1000; // 30 seconds
+
+function JournalScreenContent() {
+  // -------------------------------------------------------------------------
+  // State Variables
+  // -------------------------------------------------------------------------
   const [journalEntries, setJournalEntries] = useState([]);
   const [selectedEntry, setSelectedEntry] = useState(null);
   const [showNewEntry, setShowNewEntry] = useState(false);
@@ -34,69 +71,124 @@ export default function JournalScreen() {
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
   const [passwordModalType, setPasswordModalType] = useState('UNLOCK_JOURNAL');
   const [password, setPassword] = useState('');
+  const [showBackupSettings, setShowBackupSettings] = useState(false);
   const [biometricSettings, setBiometricSettings] = useState({
     isAvailable: false,
     types: [],
     isEnabled: false,
-    isChecking: true
+    isChecking: true,
   });
-  const [resetEmailModalVisible, setResetEmailModalVisible] = useState(false);
-  const [resetEmail, setResetEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // New security state variables
+  // New feature states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterMood, setFilterMood] = useState(null);
+  const [filterDateRange, setFilterDateRange] = useState(null);
+  const [activeTab, setActiveTab] = useState('entries'); // 'entries' | 'insights'
+  const [showCrisisSupport, setShowCrisisSupport] = useState(false);
+  const [showReminderSettings, setShowReminderSettings] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+
+  // Security state
   const [lastActivityTime, setLastActivityTime] = useState(Date.now());
   const [appState, setAppState] = useState(AppState.currentState);
+  
+  // Refs
   const activityTimeoutRef = useRef(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  // Security constants
-  const AUTO_LOCK_TIMEOUT = 5 * 60 * 1000; // 5 minutes
-  const BACKGROUND_LOCK_TIMEOUT = 30 * 1000; // 30 seconds
+  // -------------------------------------------------------------------------
+  // Filtered and Sorted Entries
+  // -------------------------------------------------------------------------
+  const filteredEntries = useMemo(() => {
+    let entries = [...journalEntries];
 
-  // ---------------------------------------------------------------------------
-  // Effects
-  // ---------------------------------------------------------------------------
-  useEffect(() => {
-    const loadAppData = async () => {
-      try {
-        const storedPassword = await SecureStore.getItemAsync('journalPassword');
-        const biometricEnabled = await SecureStore.getItemAsync('biometricEnabled');
-        
-        if (storedPassword) {
-          setJournalLocked(true);
-          setHasPassword(true);
-          
-          setBiometricSettings(prev => ({...prev, isChecking: true}));
-          const biometricInfo = await checkBiometrics();
-          setBiometricSettings({
-            ...biometricInfo,
-            isEnabled: biometricEnabled === 'true',
-            isChecking: false
-          });
-          
-          if (biometricEnabled === 'true' && biometricInfo.isAvailable) {
-            await authenticateWithBiometrics();
-          }
-        } else {
-          setHasPassword(false);
-          setBiometricSettings(prev => ({...prev, isChecking: false}));
-        }
-      } catch (error) {
-        console.log('Error loading privacy settings:', error);
-        setBiometricSettings(prev => ({...prev, isChecking: false}));
+    // Apply search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      entries = entries.filter(
+        (entry) =>
+          entry.title?.toLowerCase().includes(query) ||
+          entry.content?.toLowerCase().includes(query)
+      );
+    }
+
+    // Apply mood filter
+    if (filterMood) {
+      entries = entries.filter((entry) => entry.mood === filterMood);
+    }
+
+    // Apply date range filter
+    if (filterDateRange) {
+      const now = new Date();
+      let startDate;
+
+      switch (filterDateRange) {
+        case 'today':
+          startDate = new Date(now.setHours(0, 0, 0, 0));
+          break;
+        case 'week':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
+        case '3months':
+          startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+          break;
+        default:
+          startDate = null;
       }
+
+      if (startDate) {
+        entries = entries.filter((entry) => new Date(entry.date) >= startDate);
+      }
+    }
+
+    // Sort by date (newest first)
+    return entries.sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [journalEntries, searchQuery, filterMood, filterDateRange]);
+
+  // -------------------------------------------------------------------------
+  // Effects
+  // -------------------------------------------------------------------------
+  
+  // Initial load
+  useEffect(() => {
+    const initializeApp = async () => {
+      await loadSecuritySettings();
       await loadJournalEntries();
+      await checkPendingSync();
+      setupNotificationListeners();
     };
-    
-    loadAppData();
+
+    initializeApp();
+  }, []);
+
+  // Network status monitoring
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      setIsOnline(state.isConnected);
+      if (state.isConnected) {
+        syncQueue.processQueue();
+        checkPendingSync();
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   // Auto-lock timer
   useEffect(() => {
     const checkInactivity = () => {
       const now = Date.now();
-      if (now - lastActivityTime > AUTO_LOCK_TIMEOUT && !journalLocked && hasPassword) {
+      if (
+        now - lastActivityTime > AUTO_LOCK_TIMEOUT &&
+        !journalLocked &&
+        hasPassword
+      ) {
         setJournalLocked(true);
         Alert.alert('Session Expired', 'Journal locked due to inactivity');
       }
@@ -116,7 +208,10 @@ export default function JournalScreen() {
     let backgroundTime = null;
 
     const handleAppStateChange = (nextAppState) => {
-      if (appState.match(/inactive|background/) && nextAppState === 'active') {
+      if (
+        appState.match(/inactive|background/) &&
+        nextAppState === 'active'
+      ) {
         if (backgroundTime && hasPassword) {
           const backgroundDuration = Date.now() - backgroundTime;
           if (backgroundDuration > BACKGROUND_LOCK_TIMEOUT) {
@@ -130,7 +225,10 @@ export default function JournalScreen() {
       setAppState(nextAppState);
     };
 
-    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    const subscription = AppState.addEventListener(
+      'change',
+      handleAppStateChange
+    );
 
     return () => {
       subscription.remove();
@@ -154,47 +252,98 @@ export default function JournalScreen() {
     };
   }, [journalLocked, hasPassword]);
 
-  // Animation effect
+  // Crisis support check
   useEffect(() => {
-    Animated.stagger(100,
-      journalEntries.map(() =>
-        Animated.spring(fadeAnim, {
-          toValue: 1,
-          useNativeDriver: true,
-        })
-      )
-    ).start();
-  }, [journalEntries, fadeAnim]);
+    checkForCrisisIndicators();
+  }, [journalEntries]);
 
-  // ---------------------------------------------------------------------------
-  // Activity Tracking
-  // ---------------------------------------------------------------------------
-  const trackActivity = () => {
-    setLastActivityTime(Date.now());
-  };
+  // -------------------------------------------------------------------------
+  // Helper Functions
+  // -------------------------------------------------------------------------
 
-  const ActivityTracker = ({ children, onPress, ...props }) => {
-    return (
-      <TouchableOpacity
-        onPress={() => {
-          trackActivity();
-          if (onPress) onPress();
-        }}
-        {...props}
-      >
-        {children}
-      </TouchableOpacity>
+  const setupNotificationListeners = () => {
+    const subscription = notificationUtils.addNotificationResponseListener(
+      (response) => {
+        const data = response.notification.request.content.data;
+        if (data?.action === 'newEntry') {
+          setShowNewEntry(true);
+        }
+      }
     );
+
+    return () => subscription.remove();
   };
 
-  // ---------------------------------------------------------------------------
-  // Biometrics
-  // ---------------------------------------------------------------------------
+  const checkPendingSync = async () => {
+    const count = await syncQueue.getPendingCount();
+    setPendingSyncCount(count);
+  };
+
+  const checkForCrisisIndicators = () => {
+    if (journalEntries.length === 0) return;
+
+    const recentEntries = journalEntries.filter((e) => {
+      const entryDate = new Date(e.date);
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      return entryDate >= sevenDaysAgo;
+    });
+
+    const negativeMoods = ['sad', 'anxious', 'angry'];
+    const negativeCount = recentEntries.filter((e) =>
+      negativeMoods.includes(e.mood)
+    ).length;
+
+    if (negativeCount >= 5 && recentEntries.length >= 5) {
+      // Show crisis support after a delay to not be intrusive
+      setTimeout(() => {
+        setShowCrisisSupport(true);
+      }, 2000);
+    }
+  };
+
+  const trackActivity = useCallback(() => {
+    setLastActivityTime(Date.now());
+  }, []);
+
+  // -------------------------------------------------------------------------
+  // Security Functions
+  // -------------------------------------------------------------------------
+
+  const loadSecuritySettings = async () => {
+    try {
+      const storedPasswordHash = await SecureStore.getItemAsync('journalPassword');
+      const biometricEnabled = await SecureStore.getItemAsync('biometricEnabled');
+
+      if (storedPasswordHash) {
+        setJournalLocked(true);
+        setHasPassword(true);
+
+        setBiometricSettings((prev) => ({ ...prev, isChecking: true }));
+        const biometricInfo = await checkBiometrics();
+        setBiometricSettings({
+          ...biometricInfo,
+          isEnabled: biometricEnabled === 'true',
+          isChecking: false,
+        });
+
+        if (biometricEnabled === 'true' && biometricInfo.isAvailable) {
+          await authenticateWithBiometrics();
+        }
+      } else {
+        setHasPassword(false);
+        setBiometricSettings((prev) => ({ ...prev, isChecking: false }));
+      }
+    } catch (error) {
+      console.error('Error loading security settings:', error);
+      setBiometricSettings((prev) => ({ ...prev, isChecking: false }));
+    }
+  };
+
   const checkBiometrics = async () => {
     try {
       const hasBiometrics = await LocalAuthentication.hasHardwareAsync();
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-      
+
       let supportedTypes = [];
       try {
         const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
@@ -202,21 +351,23 @@ export default function JournalScreen() {
       } catch (error) {
         supportedTypes = [];
       }
-      
-      const authTypes = supportedTypes.map(type => {
-        switch (type) {
-          case LocalAuthentication.AuthenticationType.FINGERPRINT:
-            return 'fingerprint';
-          case LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION:
-            return 'face';
-          default:
-            return 'unknown';
-        }
-      }).filter(Boolean);
-      
+
+      const authTypes = supportedTypes
+        .map((type) => {
+          switch (type) {
+            case LocalAuthentication.AuthenticationType.FINGERPRINT:
+              return 'fingerprint';
+            case LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION:
+              return 'face';
+            default:
+              return 'unknown';
+          }
+        })
+        .filter(Boolean);
+
       return {
         isAvailable: hasBiometrics && isEnrolled,
-        types: authTypes
+        types: authTypes,
       };
     } catch (error) {
       console.error('Biometric check failed:', error);
@@ -231,10 +382,15 @@ export default function JournalScreen() {
         Alert.alert(
           'Biometrics Unavailable',
           'Biometric authentication is no longer available. Please use your password.',
-          [{ text: 'OK', onPress: () => {
-            setPasswordModalType('UNLOCK_JOURNAL');
-            setPasswordModalVisible(true);
-          }}]
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                setPasswordModalType('UNLOCK_JOURNAL');
+                setPasswordModalVisible(true);
+              },
+            },
+          ]
         );
         return;
       }
@@ -244,6 +400,7 @@ export default function JournalScreen() {
         fallbackLabel: 'Enter Password',
         disableDeviceFallback: false,
       });
+
       if (result.success) {
         setJournalLocked(false);
         setPasswordModalVisible(false);
@@ -257,87 +414,29 @@ export default function JournalScreen() {
       Alert.alert(
         'Authentication Error',
         'Could not authenticate. Please use your password.',
-        [{ text: 'OK', onPress: () => {
-          setPasswordModalType('UNLOCK_JOURNAL');
-          setPasswordModalVisible(true);
-        }}]
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              setPasswordModalType('UNLOCK_JOURNAL');
+              setPasswordModalVisible(true);
+            },
+          },
+        ]
       );
     }
   };
 
-  // ---------------------------------------------------------------------------
-  // Loading Entries with Encryption
-  // ---------------------------------------------------------------------------
-  const loadJournalEntries = async () => {
-    try {
-      const localEntries = await AsyncStorage.getItem('journalEntries');
-      let parsedLocalEntries = [];
-      if (localEntries) {
-        parsedLocalEntries = JSON.parse(localEntries);
-        // Decrypt entries
-        const decryptedEntries = await Promise.all(
-          parsedLocalEntries.map(entry => 
-            entry.encrypted ? encryptionUtils.decryptEntry(entry) : entry
-          )
-        );
-        setJournalEntries(decryptedEntries);
-      }
-      
-      const auth = getAuth();
-      if (auth.currentUser) {
-        const q = query(collection(db, "journals"), where("userId", "==", auth.currentUser.uid));
-        const querySnapshot = await getDocs(q);
-        const firebaseEntries = await Promise.all(
-          querySnapshot.docs.map(async (docItem) => {
-            const data = docItem.data();
-            let dateValue;
-            if (data.date && typeof data.date.toDate === 'function') {
-              dateValue = data.date.toDate().toISOString();
-            } else if (data.date) {
-              dateValue = data.date;
-            } else {
-              dateValue = new Date().toISOString();
-            }
-            
-            const entry = {
-              id: docItem.id,
-              ...data,
-              date: dateValue
-            };
-            
-            // Decrypt if encrypted
-            return entry.encrypted ? await encryptionUtils.decryptEntry(entry) : entry;
-          })
-        );
-        
-        const mergedEntries = [
-          ...firebaseEntries, 
-          ...parsedLocalEntries
-        ].filter((entry, index, self) => 
-            index === self.findIndex(e => e.id === entry.id)
-          )
-         .sort((a,b) => new Date(b.date) - new Date(a.date));
-        
-        setJournalEntries(mergedEntries);
-        
-        // Encrypt before storing locally
-        const encryptedForStorage = await Promise.all(
-          mergedEntries.map(entry => encryptionUtils.encryptEntry(entry))
-        );
-        await AsyncStorage.setItem('journalEntries', JSON.stringify(encryptedForStorage));
-      }
-    } catch (error) {
-      console.error("Error loading entries:", error);
-    }
-  };
+  // -------------------------------------------------------------------------
+  // Password Functions
+  // -------------------------------------------------------------------------
 
-  // ---------------------------------------------------------------------------
-  // Password & Lock Functions
-  // ---------------------------------------------------------------------------
   const unlockJournal = async () => {
     try {
-      const storedPassword = await SecureStore.getItemAsync('journalPassword');
-      if (password === storedPassword) {
+      const storedHash = await SecureStore.getItemAsync('journalPassword');
+      const isValid = await passwordUtils.verifyPassword(password, storedHash);
+
+      if (isValid) {
         setJournalLocked(false);
         setPasswordModalVisible(false);
         setPassword('');
@@ -347,50 +446,54 @@ export default function JournalScreen() {
         Alert.alert('Incorrect Password', 'Please try again.');
       }
     } catch (error) {
-      console.log('Error unlocking journal:', error);
+      console.error('Error unlocking journal:', error);
       Alert.alert('Error', 'Could not unlock the journal. Please try again.');
     }
   };
 
   const setJournalPassword = async () => {
-    const validation = passwordUtils.validatePassword(password);
-    if (!validation.isValid) {
+    const validationResult = passwordUtils.validatePassword(password);
+    if (!validationResult.isValid) {
       Alert.alert(
         'Weak Password',
-        `Password requirements:\n${validation.errors.join('\n')}`
+        `Password requirements:\n${validationResult.errors.join('\n')}`
       );
       return;
     }
-    
+
     try {
-      await SecureStore.setItemAsync('journalPassword', password);
+      const hashedPassword = await passwordUtils.hashPassword(password);
+      await SecureStore.setItemAsync('journalPassword', hashedPassword);
       setJournalLocked(true);
       setHasPassword(true);
       setPassword('');
       setPasswordModalVisible(false);
       Alert.alert('Success', 'Journal password set successfully.');
     } catch (error) {
+      console.error('Error setting password:', error);
       Alert.alert('Error', 'Failed to set password. Please try again.');
     }
   };
 
   const changeJournalPassword = async () => {
-    const validation = passwordUtils.validatePassword(password);
-    if (!validation.isValid) {
+    const validationResult = passwordUtils.validatePassword(password);
+    if (!validationResult.isValid) {
       Alert.alert(
         'Weak Password',
-        `Password requirements:\n${validation.errors.join('\n')}`
+        `Password requirements:\n${validationResult.errors.join('\n')}`
       );
       return;
     }
-    
+
     try {
-      await SecureStore.setItemAsync('journalPassword', password);
+      const hashedPassword = await passwordUtils.hashPassword(password);
+      await SecureStore.setItemAsync('journalPassword', hashedPassword);
       setHasPassword(true);
       setPassword('');
       setPasswordModalVisible(false);
       Alert.alert('Success', 'Journal password updated.');
     } catch (error) {
+      console.error('Error changing password:', error);
       Alert.alert('Error', 'Failed to change password. Please try again.');
     }
   };
@@ -400,10 +503,7 @@ export default function JournalScreen() {
       'Remove Password',
       'Are you sure you want to remove the journal password? This will make your journal accessible without authentication.',
       [
-        {
-          text: 'Cancel',
-          style: 'cancel'
-        },
+        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Remove',
           style: 'destructive',
@@ -413,13 +513,13 @@ export default function JournalScreen() {
               await SecureStore.deleteItemAsync('biometricEnabled');
               setJournalLocked(false);
               setHasPassword(false);
-              setBiometricSettings(prev => ({ ...prev, isEnabled: false }));
+              setBiometricSettings((prev) => ({ ...prev, isEnabled: false }));
               Alert.alert('Success', 'Journal password removed.');
             } catch (error) {
               Alert.alert('Error', 'Failed to remove password. Please try again.');
             }
-          }
-        }
+          },
+        },
       ]
     );
   };
@@ -440,68 +540,147 @@ export default function JournalScreen() {
     }
   };
 
-  // ---------------------------------------------------------------------------
-  // Handlers
-  // ---------------------------------------------------------------------------
   const handleToggleBiometric = async () => {
     if (biometricSettings.isAvailable) {
       const newValue = !biometricSettings.isEnabled;
       await SecureStore.setItemAsync('biometricEnabled', String(newValue));
-      setBiometricSettings(prev => ({
+      setBiometricSettings((prev) => ({
         ...prev,
-        isEnabled: newValue
+        isEnabled: newValue,
       }));
       Alert.alert(
         newValue ? 'Biometric Enabled' : 'Biometric Disabled',
-        newValue 
-          ? 'You can now unlock your journal with biometrics' 
+        newValue
+          ? 'You can now unlock your journal with biometrics'
           : 'Journal will require password to unlock'
       );
     } else {
-      Alert.alert('Not Available', 'Biometric authentication is not available on this device');
+      Alert.alert(
+        'Not Available',
+        'Biometric authentication is not available on this device'
+      );
     }
   };
 
-  const handleForgotPassword = () => {
-    setPasswordModalVisible(false);
-    setResetEmailModalVisible(true);
-  };
+  // -------------------------------------------------------------------------
+  // Data Loading Functions
+  // -------------------------------------------------------------------------
 
-  const sendPasswordResetEmail = async () => {
+  const loadJournalEntries = async () => {
     try {
+      setIsLoading(true);
+
+      // Load from local storage first
+      const localEntries = await AsyncStorage.getItem('journalEntries');
+      let parsedLocalEntries = [];
+
+      if (localEntries) {
+        parsedLocalEntries = JSON.parse(localEntries);
+        // Decrypt entries
+        const decryptedEntries = await Promise.all(
+          parsedLocalEntries.map((entry) =>
+            entry.encrypted ? encryptionUtils.decryptEntry(entry) : entry
+          )
+        );
+        setJournalEntries(decryptedEntries);
+      }
+
+      // Try to sync with Firebase if online and authenticated
       const auth = getAuth();
-      await sendPasswordResetEmail(auth, resetEmail);
-      Alert.alert(
-        'Email Sent',
-        'A password reset link has been sent to your email address.'
-      );
-      setResetEmailModalVisible(false);
-      setResetEmail('');
+      if (auth.currentUser && isOnline) {
+        const q = query(
+          collection(db, 'journals'),
+          where('userId', '==', auth.currentUser.uid)
+        );
+        const querySnapshot = await getDocs(q);
+
+        const firebaseEntries = await Promise.all(
+          querySnapshot.docs.map(async (docItem) => {
+            const data = docItem.data();
+            let dateValue;
+
+            if (data.date && typeof data.date.toDate === 'function') {
+              dateValue = data.date.toDate().toISOString();
+            } else if (data.date) {
+              dateValue = data.date;
+            } else {
+              dateValue = new Date().toISOString();
+            }
+
+            const entry = {
+              id: docItem.id,
+              ...data,
+              date: dateValue,
+            };
+
+            return entry.encrypted
+              ? await encryptionUtils.decryptEntry(entry)
+              : entry;
+          })
+        );
+
+        // Merge entries
+        const mergedEntries = [...firebaseEntries, ...parsedLocalEntries]
+          .filter(
+            (entry, index, self) =>
+              index === self.findIndex((e) => e.id === entry.id)
+          )
+          .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        setJournalEntries(mergedEntries);
+
+        // Save merged entries locally (encrypted)
+        const encryptedForStorage = await Promise.all(
+          mergedEntries.map((entry) => encryptionUtils.encryptEntry(entry))
+        );
+        await AsyncStorage.setItem(
+          'journalEntries',
+          JSON.stringify(encryptedForStorage)
+        );
+      }
     } catch (error) {
-      console.error('Error sending reset email:', error);
-      Alert.alert(
-        'Error',
-        error.message || 'Failed to send password reset email. Please try again.'
-      );
+      console.error('Error loading entries:', error);
+      Alert.alert('Error', 'Failed to load journal entries.');
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
-  const openEntry = (entry) => {
-    trackActivity();
-    setSelectedEntry(entry);
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await loadJournalEntries();
+    await checkPendingSync();
   };
 
-  // ---------------------------------------------------------------------------
-  // Rendering
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // Entry Actions
+  // -------------------------------------------------------------------------
+
+  const openEntry = useCallback(
+    (entry) => {
+      trackActivity();
+      setSelectedEntry(entry);
+    },
+    [trackActivity]
+  );
+
+  const renderEntryItem = useCallback(
+    ({ item }) => (
+      <JournalEntryItem entry={item} onPress={() => openEntry(item)} />
+    ),
+    [openEntry]
+  );
+
+  const keyExtractor = useCallback((item) => item.id, []);
+
+  // -------------------------------------------------------------------------
+  // Render Functions
+  // -------------------------------------------------------------------------
+
   const renderLockedOverlay = () => {
     if (biometricSettings.isChecking) {
-      return (
-        <LockOverlay 
-          checkingSecurity={true} 
-          message="Checking security..." 
-        />
-      );
+      return <LockOverlay checkingSecurity={true} message="Checking security..." />;
     }
     return (
       <LockOverlay
@@ -518,92 +697,229 @@ export default function JournalScreen() {
     );
   };
 
+  const renderHeader = () => (
+    <View style={styles.headerContainer}>
+      {/* Title Row */}
+      <View style={styles.headerTop}>
+        <View>
+          <Text style={styles.title}>My Journal</Text>
+          <Text style={styles.subtitle}>
+            A space for your thoughts and reflections
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={styles.newEntryButton}
+          onPress={() => {
+            trackActivity();
+            setShowNewEntry(true);
+          }}
+          disabled={journalLocked}
+        >
+          <MaterialCommunityIcons name="plus" size={24} color={Palette.white} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Status Bar */}
+      <View style={styles.statusBar}>
+        {!isOnline && (
+          <View style={styles.offlineIndicator}>
+            <MaterialCommunityIcons
+              name="cloud-off-outline"
+              size={16}
+              color={Palette.secondaryOrange}
+            />
+            <Text style={styles.offlineText}>Offline</Text>
+          </View>
+        )}
+        {pendingSyncCount > 0 && (
+          <View style={styles.syncIndicator}>
+            <MaterialCommunityIcons
+              name="sync"
+              size={16}
+              color={Palette.secondaryBlue}
+            />
+            <Text style={styles.syncText}>{pendingSyncCount} pending</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Tab Selector */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'entries' && styles.tabActive]}
+          onPress={() => setActiveTab('entries')}
+        >
+          <MaterialCommunityIcons
+            name="notebook-outline"
+            size={20}
+            color={activeTab === 'entries' ? Palette.primary : Palette.textLight}
+          />
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'entries' && styles.tabTextActive,
+            ]}
+          >
+            Entries
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'insights' && styles.tabActive]}
+          onPress={() => setActiveTab('insights')}
+        >
+          <MaterialCommunityIcons
+            name="chart-line"
+            size={20}
+            color={activeTab === 'insights' ? Palette.primary : Palette.textLight}
+          />
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'insights' && styles.tabTextActive,
+            ]}
+          >
+            Insights
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Quick Actions */}
+      <View style={styles.quickActions}>
+        {!hasPassword ? (
+          <TouchableOpacity
+            style={styles.quickActionButton}
+            onPress={() => {
+              setPasswordModalType('SET_PASSWORD');
+              setPasswordModalVisible(true);
+            }}
+          >
+            <MaterialCommunityIcons
+              name="lock-open"
+              size={18}
+              color={Palette.white}
+            />
+            <Text style={styles.quickActionText}>Set Password</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.quickActionButton}
+            onPress={() => {
+              setPasswordModalType('CHANGE_PASSWORD');
+              setPasswordModalVisible(true);
+            }}
+          >
+            <MaterialCommunityIcons
+              name="lock-reset"
+              size={18}
+              color={Palette.white}
+            />
+            <Text style={styles.quickActionText}>Security</Text>
+          </TouchableOpacity>
+        )}
+
+        <TouchableOpacity
+          style={styles.quickActionButton}
+          onPress={() => setShowReminderSettings(true)}
+        >
+          <MaterialCommunityIcons name="bell-outline" size={18} color={Palette.white} />
+          <Text style={styles.quickActionText}>Reminders</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+  style={[styles.quickActionButton, { backgroundColor: Palette.secondaryBlue }]}
+  onPress={() => setShowBackupSettings(true)}
+>
+  <MaterialCommunityIcons name="cloud-sync" size={18} color={Palette.white} />
+  <Text style={styles.quickActionText}>Backup</Text>
+</TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.quickActionButton, styles.crisisButton]}
+          onPress={() => setShowCrisisSupport(true)}
+        >
+          <MaterialCommunityIcons name="heart-outline" size={18} color={Palette.white} />
+          <Text style={styles.quickActionText}>Get Help</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Search & Filter (only for entries tab) */}
+      {activeTab === 'entries' && (
+        <>
+          <SearchBar
+            onSearch={setSearchQuery}
+            placeholder="Search your entries..."
+          />
+          <FilterBar
+            selectedMood={filterMood}
+            onMoodChange={setFilterMood}
+            selectedDateRange={filterDateRange}
+            onDateRangeChange={setFilterDateRange}
+          />
+        </>
+      )}
+    </View>
+  );
+
+  const renderEmptyList = () => (
+    <View style={styles.emptyContainer}>
+      <MaterialCommunityIcons
+        name="notebook-outline"
+        size={64}
+        color={Palette.textLight}
+      />
+      <Text style={styles.emptyTitle}>No entries yet</Text>
+      <Text style={styles.emptySubtitle}>
+        {searchQuery || filterMood || filterDateRange
+          ? 'No entries match your filters'
+          : 'Start journaling to track your thoughts and moods'}
+      </Text>
+      {!searchQuery && !filterMood && !filterDateRange && (
+        <TouchableOpacity
+          style={styles.emptyButton}
+          onPress={() => setShowNewEntry(true)}
+        >
+          <Text style={styles.emptyButtonText}>Write Your First Entry</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
+  // -------------------------------------------------------------------------
+  // Main Render
+  // -------------------------------------------------------------------------
+
   return (
     <SafeAreaView style={styles.container}>
       {journalLocked && renderLockedOverlay()}
 
-      {/* HEADER */}
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <Text style={styles.title}>My Journal</Text>
-          <ActivityTracker 
-            style={styles.newEntryHeaderButton}
-            onPress={() => setShowNewEntry(true)}
-            disabled={journalLocked}
-          >
-            <MaterialCommunityIcons name="plus" size={24} color={Palette.white} />
-            <Text style={styles.newEntryHeaderButtonText}>New</Text>
-          </ActivityTracker>
-        </View>
-        <Text style={styles.subtitle}>A space for your thoughts, feelings, and reflections.</Text>
-        
-        {/* PRIVACY BUTTONS */}
-        <ScrollView 
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.privacyContainer}
-        >
-          {!hasPassword ? (
-            <ActivityTracker 
-              style={styles.privacyButton}
-              onPress={() => {
-                setPasswordModalType('SET_PASSWORD');
-                setPasswordModalVisible(true);
-              }}
-            >
-              <MaterialCommunityIcons name="lock-open" size={20} color={Palette.white} />
-              <Text style={styles.privacyButtonText}>Set Password</Text>
-            </ActivityTracker>
+      {!journalLocked && (
+        <>
+          {activeTab === 'entries' ? (
+            <FlatList
+              data={filteredEntries}
+              renderItem={renderEntryItem}
+              keyExtractor={keyExtractor}
+              ListHeaderComponent={renderHeader}
+              ListEmptyComponent={renderEmptyList}
+              contentContainerStyle={styles.listContent}
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              initialNumToRender={10}
+              maxToRenderPerBatch={5}
+              windowSize={5}
+              removeClippedSubviews={true}
+              showsVerticalScrollIndicator={false}
+            />
           ) : (
             <>
-              <ActivityTracker 
-                style={styles.privacyButton}
-                onPress={() => {
-                  setPasswordModalType('CHANGE_PASSWORD');
-                  setPasswordModalVisible(true);
-                }}
-              >
-                <MaterialCommunityIcons name="lock-reset" size={20} color={Palette.white} />
-                <Text style={styles.privacyButtonText}>Change Password</Text>
-              </ActivityTracker>
-
-              <ActivityTracker 
-                style={styles.privacyButton}
-                onPress={handleToggleBiometric}
-              >
-                <MaterialCommunityIcons 
-                  name={biometricSettings.isEnabled ? 'fingerprint-off' : 'fingerprint'} 
-                  size={20} 
-                  color={Palette.white} 
-                />
-                <Text style={styles.privacyButtonText}>
-                  {biometricSettings.isEnabled ? 'Disable Biometric' : 'Enable Biometric'}
-                </Text>
-              </ActivityTracker>
-
-              <ActivityTracker 
-                style={styles.privacyButton}
-                onPress={removeJournalPassword}
-              >
-                <MaterialCommunityIcons name="lock" size={20} color={Palette.white} />
-                <Text style={styles.privacyButtonText}>Remove Password</Text>
-              </ActivityTracker>
+              {renderHeader()}
+              <MoodAnalytics entries={journalEntries} />
             </>
           )}
-        </ScrollView>
-      </View>
-      
-      {/* JOURNAL ENTRIES LIST */}
-      {!journalLocked && (
-        <JournalEntryList 
-          fadeAnim={fadeAnim}
-          journalEntries={journalEntries}
-          onOpenEntry={openEntry}
-          trackActivity={trackActivity}
-        />
+        </>
       )}
 
-      {/* NEW ENTRY MODAL */}
+      {/* Modals */}
       <NewEntryModal
         visible={showNewEntry}
         onClose={() => {
@@ -614,9 +930,10 @@ export default function JournalScreen() {
         setJournalEntries={setJournalEntries}
         encryptionUtils={encryptionUtils}
         trackActivity={trackActivity}
+        syncQueue={syncQueue}
+        isOnline={isOnline}
       />
 
-      {/* VIEW ENTRY MODAL */}
       <ViewEntryModal
         entry={selectedEntry}
         isLoading={isLoading}
@@ -628,9 +945,10 @@ export default function JournalScreen() {
         journalEntries={journalEntries}
         setJournalEntries={setJournalEntries}
         trackActivity={trackActivity}
+        syncQueue={syncQueue}
+        isOnline={isOnline}
       />
 
-      {/* PASSWORD MODAL */}
       <PasswordModal
         visible={passwordModalVisible}
         password={password}
@@ -646,7 +964,34 @@ export default function JournalScreen() {
         onBiometricPress={authenticateWithBiometrics}
         biometricTypes={biometricSettings.types}
       />
+
+      <CrisisSupport
+        visible={showCrisisSupport}
+        onClose={() => setShowCrisisSupport(false)}
+      />
+
+      <ReminderSettings
+        visible={showReminderSettings}
+        onClose={() => setShowReminderSettings(false)}
+      />
+
+      <BackupSettings
+  visible={showBackupSettings}
+  onClose={() => setShowBackupSettings(false)}
+  journalEntries={journalEntries}
+  setJournalEntries={setJournalEntries}
+  onRefresh={handleRefresh}
+/>
     </SafeAreaView>
+  );
+}
+
+// Wrap with Error Boundary
+export default function JournalScreen() {
+  return (
+    <ErrorBoundary>
+      <JournalScreenContent />
+    </ErrorBoundary>
   );
 }
 
@@ -655,14 +1000,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Palette.background,
   },
-  header: {
-    padding: spacing.lg,
-    paddingBottom: spacing.sm,
+  headerContainer: {
+    paddingTop: spacing.md,
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    paddingHorizontal: spacing.lg,
     marginBottom: spacing.sm,
   },
   title: {
@@ -671,31 +1016,85 @@ const styles = StyleSheet.create({
     color: Palette.textDark,
   },
   subtitle: {
-    fontSize: typography.body.fontSize,
+    fontSize: typography.caption.fontSize,
     color: Palette.textLight,
     marginTop: spacing.xs,
   },
-  newEntryHeaderButton: {
+  newEntryButton: {
+    backgroundColor: Palette.primary,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.medium,
+  },
+  statusBar: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  offlineIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Palette.secondaryBlue,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    backgroundColor: Palette.secondaryOrange + '20',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
     borderRadius: borderRadius.full,
-    ...shadows.low,
+    marginRight: spacing.sm,
   },
-  newEntryHeaderButtonText: {
-    color: Palette.white,
-    fontSize: typography.body.fontSize,
-    fontWeight: typography.h3.fontWeight,
+  offlineText: {
+    fontSize: typography.small.fontSize,
+    color: Palette.secondaryOrange,
     marginLeft: spacing.xs,
   },
-  privacyContainer: {
+  syncIndicator: {
     flexDirection: 'row',
-    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    backgroundColor: Palette.secondaryBlue + '20',
     paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
   },
-  privacyButton: {
+  syncText: {
+    fontSize: typography.small.fontSize,
+    color: Palette.secondaryBlue,
+    marginLeft: spacing.xs,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    backgroundColor: Palette.card,
+    borderRadius: borderRadius.md,
+    padding: spacing.xs,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.sm,
+  },
+  tabActive: {
+    backgroundColor: Palette.primary + '15',
+  },
+  tabText: {
+    fontSize: typography.body.fontSize,
+    color: Palette.textLight,
+    marginLeft: spacing.xs,
+  },
+  tabTextActive: {
+    color: Palette.primary,
+    fontWeight: '600',
+  },
+  quickActions: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  quickActionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Palette.secondaryPurple,
@@ -703,13 +1102,48 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
     marginRight: spacing.sm,
-    minWidth: 150,
-    ...shadows.low,
   },
-  privacyButtonText: {
+  quickActionText: {
     color: Palette.white,
     fontSize: typography.caption.fontSize,
-    fontWeight: typography.h3.fontWeight,
-    marginLeft: spacing.sm,
+    fontWeight: '500',
+    marginLeft: spacing.xs,
+  },
+  crisisButton: {
+    backgroundColor: Palette.secondaryRed,
+  },
+  listContent: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xl,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xl * 2,
+  },
+  emptyTitle: {
+    fontSize: typography.h2.fontSize,
+    fontWeight: typography.h2.fontWeight,
+    color: Palette.textDark,
+    marginTop: spacing.md,
+  },
+  emptySubtitle: {
+    fontSize: typography.body.fontSize,
+    color: Palette.textLight,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.xl,
+  },
+  emptyButton: {
+    backgroundColor: Palette.primary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.full,
+    marginTop: spacing.lg,
+  },
+  emptyButtonText: {
+    color: Palette.white,
+    fontSize: typography.body.fontSize,
+    fontWeight: '600',
   },
 });

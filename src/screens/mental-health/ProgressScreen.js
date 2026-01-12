@@ -1,5 +1,5 @@
-
-import React, { useState, useEffect } from 'react';
+// screens/ProgressScreen.js
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,27 +13,39 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getAuth } from 'firebase/auth';
-import { db } from '../../config/firebase';  // Adjust as needed
+import { db } from '../../config/firebase';
 import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { LineChart } from 'react-native-chart-kit';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Import theme constants
 import {
   Palette,
   spacing,
   typography,
   shadows,
   borderRadius,
-} from '../../theme/colors'; // Adjust path as needed
+} from '../../theme/colors';
 
 const { width: screenWidth } = Dimensions.get('window');
+
+// Mood score mapping for journal entries
+const MOOD_SCORES = {
+  great: 10,
+  good: 8,
+  neutral: 6,
+  down: 4,
+  sad: 2,
+  anxious: 3,
+  angry: 2,
+  tired: 4,
+};
 
 export default function ProgressScreen() {
   const [selectedPeriod, setSelectedPeriod] = useState('week');
   const [progressData, setProgressData] = useState({ week: null, month: null });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [cbtRecordsData, setCbtRecordsData] = useState([]);
+  const [isOffline, setIsOffline] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -42,62 +54,61 @@ export default function ProgressScreen() {
   const fetchData = async () => {
     try {
       const auth = getAuth();
-      if (!auth.currentUser) return;
+      if (!auth.currentUser) {
+        // Try to load from local storage
+        await loadLocalData();
+        return;
+      }
 
       setLoading(true);
+      setIsOffline(false);
 
-      const [weekData, monthData, cbtData] = await Promise.all([
+      const [weekData, monthData] = await Promise.all([
         fetchPeriodData('week'),
         fetchPeriodData('month'),
-        fetchCbtRecordsData(),
       ]);
 
-      setProgressData({
+      const newProgressData = {
         week: weekData,
         month: monthData,
-      });
-      setCbtRecordsData(cbtData);
+      };
+
+      setProgressData(newProgressData);
+
+      // Cache the data locally
+      await AsyncStorage.setItem('progressData', JSON.stringify(newProgressData));
+      await AsyncStorage.setItem('progressDataTimestamp', Date.now().toString());
     } catch (error) {
-      console.error("Error fetching progress data:", error);
+      console.error('Error fetching progress data:', error);
+      // Try to load cached data
+      await loadLocalData();
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  const fetchCbtRecordsData = async () => {
-    const auth = getAuth();
-    if (!auth.currentUser) return [];
+  const loadLocalData = async () => {
     try {
-      const q = query(
-        collection(db, 'cbtRecords'),
-        where('userId', '==', auth.currentUser.uid),
-        orderBy('timestamp', 'desc')
-      );
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        date: doc.data().timestamp?.toDate() || new Date(),
-      }));
+      const cachedData = await AsyncStorage.getItem('progressData');
+      if (cachedData) {
+        setProgressData(JSON.parse(cachedData));
+        setIsOffline(true);
+      }
     } catch (error) {
-      console.error("Error fetching CBT records:", error);
-      return [];
+      console.error('Error loading cached data:', error);
     }
   };
 
-  const onRefresh = () => {
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchData();
-  };
-
-  const handleManualRefresh = () => {
-    setRefreshing(true);
-    fetchData();
-  };
+  }, []);
 
   const fetchPeriodData = async (period) => {
     const auth = getAuth();
+    if (!auth.currentUser) return getDefaultData(period);
+
     const now = new Date();
     let startDate = new Date();
 
@@ -109,56 +120,68 @@ export default function ProgressScreen() {
 
     try {
       // Build queries for each collection
-      const moodQuery = query(
-        collection(db, 'moodEntries'),
-        where('userId', '==', auth.currentUser.uid),
-        where('date', '>=', startDate),
-        orderBy('date', 'asc')
+      const queries = {
+        moods: query(
+          collection(db, 'moodEntries'),
+          where('userId', '==', auth.currentUser.uid),
+          where('date', '>=', startDate),
+          orderBy('date', 'asc')
+        ),
+        activities: query(
+          collection(db, 'activities'),
+          where('userId', '==', auth.currentUser.uid),
+          where('date', '>=', startDate)
+        ),
+        journals: query(
+          collection(db, 'journals'),
+          where('userId', '==', auth.currentUser.uid),
+          where('date', '>=', startDate)
+        ),
+        grounding: query(
+          collection(db, 'groundingSessions'),
+          where('userId', '==', auth.currentUser.uid),
+          where('timestamp', '>=', startDate)
+        ),
+        cbt: query(
+          collection(db, 'cbtRecords'),
+          where('userId', '==', auth.currentUser.uid),
+          where('timestamp', '>=', startDate)
+        ),
+      };
+
+      const [moodSnapshot, activitiesSnapshot, journalSnapshot, groundingSnapshot, cbtSnapshot] =
+        await Promise.all([
+          getDocs(queries.moods).catch(() => ({ docs: [], size: 0 })),
+          getDocs(queries.activities).catch(() => ({ docs: [], size: 0 })),
+          getDocs(queries.journals).catch(() => ({ docs: [], size: 0 })),
+          getDocs(queries.grounding).catch(() => ({ docs: [], size: 0 })),
+          getDocs(queries.cbt).catch(() => ({ docs: [], size: 0 })),
+        ]);
+
+      // Process mood entries
+      const moodEntries = moodSnapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          ...data,
+          date: data.date?.toDate ? data.date.toDate() : new Date(data.date),
+          rating: data.rating || 5,
+        };
+      });
+
+      // Process journal entries (convert mood to rating)
+      const journalMoodEntries = journalSnapshot.docs.map((doc) => {
+        const data = doc.data();
+        const date = data.date?.toDate ? data.date.toDate() : new Date(data.date);
+        return {
+          date,
+          rating: MOOD_SCORES[data.mood] || 5,
+        };
+      });
+
+      // Combine mood entries
+      const allMoodEntries = [...moodEntries, ...journalMoodEntries].sort(
+        (a, b) => a.date - b.date
       );
-
-      const activitiesQuery = query(
-        collection(db, 'activities'),
-        where('userId', '==', auth.currentUser.uid),
-        where('date', '>=', startDate)
-      );
-
-      const journalQuery = query(
-        collection(db, 'journals'),
-        where('userId', '==', auth.currentUser.uid),
-        where('date', '>=', startDate)
-      );
-
-      const groundingQuery = query(
-        collection(db, 'groundingSessions'),
-        where('userId', '==', auth.currentUser.uid),
-        where('timestamp', '>=', startDate)
-      );
-
-      const cbtQuery = query(
-        collection(db, 'cbtRecords'),
-        where('userId', '==', auth.currentUser.uid),
-        where('timestamp', '>=', startDate)
-      );
-
-      const [
-        moodSnapshot,
-        activitiesSnapshot,
-        journalSnapshot,
-        groundingSnapshot,
-        cbtSnapshot,
-      ] = await Promise.all([
-        getDocs(moodQuery),
-        getDocs(activitiesQuery),
-        getDocs(journalQuery),
-        getDocs(groundingQuery),
-        getDocs(cbtQuery),
-      ]);
-
-      // Mood data
-      const moodEntries = moodSnapshot.docs.map((doc) => ({
-        ...doc.data(),
-        date: doc.data().date.toDate(),
-      }));
 
       // Activities summary
       const activities = {
@@ -166,19 +189,27 @@ export default function ProgressScreen() {
         breathingSessions: 0,
         groundingSessions: groundingSnapshot.size,
         cbtSessions: cbtSnapshot.size,
+        totalActivities: 0,
       };
 
-      // Count "breathing" from "activities"
+      // Count breathing from activities
       activitiesSnapshot.forEach((doc) => {
         const data = doc.data();
         if (data.type === 'breathing') activities.breathingSessions++;
       });
 
+      activities.totalActivities =
+        activities.journalEntries +
+        activities.breathingSessions +
+        activities.groundingSessions +
+        activities.cbtSessions;
+
       // Calculate stats
-      const moodAverage = calculateMoodAverage(moodEntries);
-      const moodData = generateMoodData(moodEntries, period);
+      const moodAverage = calculateMoodAverage(allMoodEntries);
+      const moodData = generateMoodData(allMoodEntries, period);
       const streak = await calculateStreak();
-      const insights = generateInsights(activities, moodAverage, period);
+      const insights = generateInsights(activities, moodAverage, allMoodEntries, period);
+      const completionRate = calculateCompletionRate(activities, period);
 
       return {
         moodAverage,
@@ -186,6 +217,8 @@ export default function ProgressScreen() {
         ...activities,
         streak,
         insights,
+        completionRate,
+        entriesCount: allMoodEntries.length,
       };
     } catch (error) {
       console.error(`Error fetching ${period} data:`, error);
@@ -194,34 +227,36 @@ export default function ProgressScreen() {
   };
 
   const calculateMoodAverage = (entries) => {
-    if (entries.length === 0) return 0;
-    const sum = entries.reduce((total, entry) => total + entry.rating, 0);
+    if (entries.length === 0) return 5;
+    const sum = entries.reduce((total, entry) => total + (entry.rating || 5), 0);
     return sum / entries.length;
   };
 
   const generateMoodData = (entries, period) => {
+    const dataPoints = period === 'week' ? 7 : 4;
+    const data = Array(dataPoints).fill(5); // Default to neutral
+
+    if (entries.length === 0) return data;
+
     if (period === 'week') {
-      // Weekly data
-      const dailyAverages = Array(7).fill(0);
-      const dayCounts = Array(7).fill(0);
+      const dailyTotals = Array(7).fill(0);
+      const dailyCounts = Array(7).fill(0);
 
       entries.forEach((entry) => {
-        const day = entry.date.getDay(); // 0-6, Sunday-Saturday
-        dailyAverages[day] += entry.rating;
-        dayCounts[day]++;
+        const day = entry.date.getDay();
+        dailyTotals[day] += entry.rating || 5;
+        dailyCounts[day]++;
       });
 
-      return dailyAverages.map((sum, i) =>
-        dayCounts[i] > 0 ? sum / dayCounts[i] : 0
-      );
+      return dailyTotals.map((sum, i) => (dailyCounts[i] > 0 ? sum / dailyCounts[i] : 5));
     } else {
-      // Monthly data => group by 4 weeks
+      // Monthly - group by weeks
+      const now = new Date();
       return Array(4)
         .fill(0)
         .map((_, i) => {
-          // A quick and rough approach: not fully accurate for all months
-          const weekStart = new Date();
-          weekStart.setDate(weekStart.getDate() - 7 * (4 - i));
+          const weekStart = new Date(now);
+          weekStart.setDate(now.getDate() - 7 * (4 - i));
           const weekEnd = new Date(weekStart);
           weekEnd.setDate(weekStart.getDate() + 7);
 
@@ -229,83 +264,166 @@ export default function ProgressScreen() {
             (entry) => entry.date >= weekStart && entry.date < weekEnd
           );
 
-          return weekEntries.length > 0
-            ? weekEntries.reduce((sum, entry) => sum + entry.rating, 0) /
-                weekEntries.length
-            : 0;
+          if (weekEntries.length === 0) return 5;
+          return (
+            weekEntries.reduce((sum, entry) => sum + (entry.rating || 5), 0) / weekEntries.length
+          );
         });
     }
   };
 
   const calculateStreak = async () => {
-    // Example "streak" logic: checks the "activities" collection for daily records
     try {
       const auth = getAuth();
+      if (!auth.currentUser) return 0;
+
       const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const startDate = new Date(today);
+      startDate.setDate(today.getDate() - 365);
 
+      // Check multiple collections for activity
+      const collections = ['activities', 'journals', 'moodEntries'];
+      const uniqueDates = new Set();
+
+      for (const collectionName of collections) {
+        try {
+          const q = query(
+            collection(db, collectionName),
+            where('userId', '==', auth.currentUser.uid),
+            where(collectionName === 'activities' ? 'date' : 'date', '>=', startDate)
+          );
+
+          const snapshot = await getDocs(q);
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            const dateField = data.date || data.timestamp;
+            if (dateField) {
+              const date = dateField.toDate ? dateField.toDate() : new Date(dateField);
+              const dateString = date.toISOString().split('T')[0];
+              uniqueDates.add(dateString);
+            }
+          });
+        } catch (error) {
+          // Continue with other collections
+        }
+      }
+
+      const sortedDates = Array.from(uniqueDates).sort().reverse();
       let streak = 0;
-      let currentDate = new Date(today);
+      let currentDate = new Date();
 
-      while (streak < 365) {
-        const dateQuery = query(
-          collection(db, 'activities'),
-          where('userId', '==', auth.currentUser.uid),
-          where('date', '>=', currentDate),
-          where('date', '<', new Date(currentDate.getTime() + 86400000)) // +1 day
-        );
-
-        const snapshot = await getDocs(dateQuery);
-        if (snapshot.empty) break;
-
+      const todayString = currentDate.toISOString().split('T')[0];
+      if (sortedDates.includes(todayString)) {
         streak++;
         currentDate.setDate(currentDate.getDate() - 1);
+      } else {
+        currentDate.setDate(currentDate.getDate() - 1);
       }
+
+      for (let i = 0; i < 365; i++) {
+        const dateString = currentDate.toISOString().split('T')[0];
+        if (sortedDates.includes(dateString)) {
+          streak++;
+          currentDate.setDate(currentDate.getDate() - 1);
+        } else {
+          break;
+        }
+      }
+
       return streak;
     } catch (error) {
-      console.error("Error calculating streak:", error);
+      console.error('Error calculating streak:', error);
       return 0;
     }
   };
 
-  const generateInsights = (activities, moodAverage, period) => {
+  const calculateCompletionRate = (activities, period) => {
+    const targetDays = period === 'week' ? 7 : 30;
+    const activeDays = Math.min(activities.totalActivities, targetDays);
+    return Math.round((activeDays / targetDays) * 100);
+  };
+
+  const generateInsights = (activities, moodAverage, moodEntries, period) => {
     const insights = [];
     const periodText = period === 'week' ? 'week' : 'month';
 
-    // Example thresholds / logic
-    if (moodAverage > 6) {
+    // Mood trend insight
+    if (moodEntries.length >= 3) {
+      const recentEntries = moodEntries.slice(-3);
+      const olderEntries = moodEntries.slice(0, Math.max(moodEntries.length - 3, 1));
+      const recentAvg =
+        recentEntries.reduce((sum, e) => sum + e.rating, 0) / recentEntries.length;
+      const olderAvg = olderEntries.reduce((sum, e) => sum + e.rating, 0) / olderEntries.length;
+
+      if (recentAvg > olderAvg + 1) {
+        insights.push({
+          title: 'Mood Improving',
+          description: 'Your recent mood scores are trending upward. Great progress!',
+          icon: 'trending-up',
+          color: '#4CAF50',
+        });
+      } else if (recentAvg < olderAvg - 1) {
+        insights.push({
+          title: 'Check In With Yourself',
+          description:
+            "Your mood has dipped recently. Remember, it's okay to have difficult days.",
+          icon: 'heart-pulse',
+          color: '#E57373',
+        });
+      }
+    }
+
+    // Activity insights
+    if (moodAverage >= 7) {
       insights.push({
-        title: "Positive Mood",
-        description: `Your average mood was ${moodAverage.toFixed(1)}/10 this ${periodText}.`,
+        title: 'Positive Outlook',
+        description: `Your average mood was ${moodAverage.toFixed(1)}/10 this ${periodText}. Keep up the great work!`,
         icon: 'emoticon-happy-outline',
-        color: Palette.primary, // or "#4CAF50" if you prefer
+        color: '#4CAF50',
+      });
+    } else if (moodAverage < 4) {
+      insights.push({
+        title: 'We\'re Here For You',
+        description: `It seems like this ${periodText} has been challenging. Consider trying some breathing exercises or reaching out for support.`,
+        icon: 'hand-heart',
+        color: '#9B59B6',
       });
     }
 
-    if (activities.journalEntries > (period === 'week' ? 3 : 12)) {
+    if (activities.journalEntries >= (period === 'week' ? 5 : 15)) {
       insights.push({
-        title: "Reflective Practice",
-        description: `You completed ${activities.journalEntries} journal entries.`,
-        icon: 'notebook-edit',
-        color: Palette.secondaryBlue, // or "#2196F3" if you prefer
+        title: 'Consistent Journaler',
+        description: `You wrote ${activities.journalEntries} journal entries. Reflection is key to self-awareness!`,
+        icon: 'notebook-check',
+        color: '#5C6BC0',
       });
     }
 
-    if (activities.breathingSessions > (period === 'week' ? 5 : 20)) {
+    if (activities.breathingSessions >= (period === 'week' ? 7 : 20)) {
       insights.push({
-        title: "Mindful Breathing",
-        description: `You did ${activities.breathingSessions} breathing exercises.`,
+        title: 'Mindful Breather',
+        description: `${activities.breathingSessions} breathing sessions completed. Your dedication to mindfulness is paying off!`,
         icon: 'weather-windy',
-        color: Palette.primary, // "#4DB6AC"
+        color: '#26A69A',
       });
     }
 
+    if (activities.cbtSessions >= (period === 'week' ? 3 : 10)) {
+      insights.push({
+        title: 'Thought Champion',
+        description: `You completed ${activities.cbtSessions} CBT exercises. You're building strong mental skills!`,
+        icon: 'brain',
+        color: '#AB47BC',
+      });
+    }
+
+    // Default insight if none generated
     if (insights.length === 0) {
       insights.push({
-        title: "Keep Going!",
-        description: "Regular practice leads to better mental health outcomes.",
-        icon: 'heart',
-        color: Palette.secondaryRed, // or "#E57373"
+        title: 'Keep Going!',
+        description: `Every small step counts. Try to engage with at least one activity each day this ${periodText}.`,
+        icon: 'star-outline',
+        color: '#FFB74D',
       });
     }
 
@@ -313,57 +431,73 @@ export default function ProgressScreen() {
   };
 
   const getDefaultData = (period) => ({
-    moodAverage: 0,
-    moodData: Array(period === 'week' ? 7 : 4).fill(0),
+    moodAverage: 5,
+    moodData: Array(period === 'week' ? 7 : 4).fill(5),
     journalEntries: 0,
     breathingSessions: 0,
     groundingSessions: 0,
     cbtSessions: 0,
+    totalActivities: 0,
     streak: 0,
+    completionRate: 0,
+    entriesCount: 0,
     insights: [
       {
-        title: "No Data Yet",
-        description: `Complete some activities to see your ${period}ly progress.`,
-        icon: 'chart-line',
-        color: Palette.textLight,
+        title: 'Start Your Journey',
+        description: `Complete some activities to see your ${period === 'week' ? 'weekly' : 'monthly'} progress.`,
+        icon: 'rocket-launch-outline',
+        color: '#64B5F6',
       },
     ],
   });
 
-  /////////////////////////////////////////////////////////////////////////////
   // UI Components
-  /////////////////////////////////////////////////////////////////////////////
-  const StatCard = ({ title, value, icon, color }) => (
+  const StatCard = ({ title, value, icon, color, subtitle }) => (
     <View style={styles.statCard}>
       <View style={[styles.statIconContainer, { backgroundColor: color + '20' }]}>
-        <MaterialCommunityIcons name={icon} size={28} color={color} />
+        <MaterialCommunityIcons name={icon} size={24} color={color} />
       </View>
-      <View>
+      <View style={styles.statTextContainer}>
         <Text style={styles.statValue}>{value}</Text>
         <Text style={styles.statTitle}>{title}</Text>
+        {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
       </View>
     </View>
   );
 
-  // Mood color logic
   const getMoodColor = (value) => {
-    if (value <= 3) return Palette.secondaryRed;  // red for low mood
-    if (value <= 6) return '#FFC107';            // or a mid-range color in your palette
-    return '#4CAF50';                            // or a bright green in your palette
+    if (value <= 3) return '#E57373';
+    if (value <= 5) return '#FFB74D';
+    if (value <= 7) return '#81C784';
+    return '#4CAF50';
   };
 
-  const ActivityItem = ({ icon, label, value, color }) => (
+  const getMoodEmoji = (value) => {
+    if (value <= 3) return 'emoticon-sad-outline';
+    if (value <= 5) return 'emoticon-neutral-outline';
+    if (value <= 7) return 'emoticon-happy-outline';
+    return 'emoticon-excited-outline';
+  };
+
+  const ActivityItem = ({ icon, label, value, color, target }) => (
     <View style={styles.activityItem}>
       <View style={[styles.activityIconContainer, { backgroundColor: color + '20' }]}>
-        <MaterialCommunityIcons name={icon} size={24} color={color} />
+        <MaterialCommunityIcons name={icon} size={22} color={color} />
       </View>
-      <Text style={styles.activityLabel}>{label}</Text>
-      <Text style={styles.activityValue}>{value}</Text>
+      <View style={styles.activityTextContainer}>
+        <Text style={styles.activityLabel}>{label}</Text>
+        {target && (
+          <Text style={styles.activityTarget}>
+            Target: {target}/{selectedPeriod === 'week' ? 'week' : 'month'}
+          </Text>
+        )}
+      </View>
+      <Text style={[styles.activityValue, { color }]}>{value}</Text>
     </View>
   );
 
   const InsightCard = ({ title, description, icon, color }) => (
-    <View style={styles.insightCard}>
+    <View style={[styles.insightCard, { borderLeftColor: color }]}>
       <MaterialCommunityIcons name={icon} size={24} color={color} style={styles.insightIcon} />
       <View style={styles.insightContent}>
         <Text style={[styles.insightTitle, { color }]}>{title}</Text>
@@ -372,9 +506,7 @@ export default function ProgressScreen() {
     </View>
   );
 
-  /////////////////////////////////////////////////////////////////////////////
-  // Render
-  /////////////////////////////////////////////////////////////////////////////
+  // Loading State
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -387,17 +519,16 @@ export default function ProgressScreen() {
   }
 
   const currentData = progressData[selectedPeriod] || getDefaultData(selectedPeriod);
-
-  // Build a labels array for the chart based on period
   const labels =
     selectedPeriod === 'week'
       ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-      : ['Week1', 'Week2', 'Week3', 'Week4'];
+      : ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -410,14 +541,17 @@ export default function ProgressScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerRow}>
-            <Text style={styles.title}>Your Progress</Text>
-            <TouchableOpacity onPress={handleManualRefresh} style={styles.refreshButton}>
-              <MaterialCommunityIcons name="refresh" size={24} color={Palette.secondaryBlue} />
-            </TouchableOpacity>
+            <View>
+              <Text style={styles.title}>Your Progress</Text>
+              <Text style={styles.subtitle}>Track your mental wellness journey</Text>
+            </View>
+            {isOffline && (
+              <View style={styles.offlineBadge}>
+                <MaterialCommunityIcons name="cloud-off-outline" size={14} color="#F57C00" />
+                <Text style={styles.offlineText}>Offline</Text>
+              </View>
+            )}
           </View>
-          <Text style={styles.subtitle}>
-            Review your activity and gain insights into your mental wellness journey.
-          </Text>
         </View>
 
         {/* Period Selector */}
@@ -427,10 +561,7 @@ export default function ProgressScreen() {
             onPress={() => setSelectedPeriod('week')}
           >
             <Text
-              style={[
-                styles.periodText,
-                selectedPeriod === 'week' && styles.activePeriodText,
-              ]}
+              style={[styles.periodText, selectedPeriod === 'week' && styles.activePeriodText]}
             >
               This Week
             </Text>
@@ -440,119 +571,136 @@ export default function ProgressScreen() {
             onPress={() => setSelectedPeriod('month')}
           >
             <Text
-              style={[
-                styles.periodText,
-                selectedPeriod === 'month' && styles.activePeriodText,
-              ]}
+              style={[styles.periodText, selectedPeriod === 'month' && styles.activePeriodText]}
             >
               This Month
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Key Stats */}
-        <View style={[styles.card, shadows.medium]}>
-          <Text style={styles.cardTitle}>Key Stats</Text>
-          <View style={styles.statsContainer}>
-            <StatCard
-              title="Avg. Mood"
-              value={currentData.moodAverage.toFixed(1)}
-              icon="emoticon-happy-outline"
-              color={Palette.secondaryOrange} // e.g. "#FFB74D"
-            />
-            <StatCard
-              title="Current Streak"
-              value={`${currentData.streak} days`}
-              icon="fire"
-              color={Palette.secondaryRed} // e.g. "#E57373"
-            />
-          </View>
+        {/* Key Stats Row */}
+        <View style={styles.statsRow}>
+          <StatCard
+            title="Avg. Mood"
+            value={currentData.moodAverage.toFixed(1)}
+            icon={getMoodEmoji(currentData.moodAverage)}
+            color={getMoodColor(currentData.moodAverage)}
+            subtitle="out of 10"
+          />
+          <StatCard
+            title="Streak"
+            value={currentData.streak}
+            icon="fire"
+            color={currentData.streak > 0 ? '#FF7043' : '#9E9E9E'}
+            subtitle="days"
+          />
         </View>
 
-        {/* Mood Over Time */}
+        <View style={styles.statsRow}>
+          <StatCard
+            title="Activities"
+            value={currentData.totalActivities}
+            icon="checkbox-marked-circle-outline"
+            color="#5C6BC0"
+            subtitle="completed"
+          />
+          <StatCard
+            title="Completion"
+            value={`${currentData.completionRate}%`}
+            icon="chart-donut"
+            color="#26A69A"
+            subtitle="rate"
+          />
+        </View>
+
+        {/* Mood Chart */}
         <View style={[styles.card, shadows.medium]}>
-          <Text style={styles.cardTitle}>Mood Over Time</Text>
-          <View style={styles.chartContainer}>
-            <LineChart
-              data={{
-                labels: labels,
-                datasets: [
-                  {
-                    data: currentData.moodData,
-                    color: (opacity = 1) => `rgba(100, 181, 246, ${opacity})`, // or use Palette
-                    strokeWidth: 3,
-                  },
-                  {
-                    data: [5, 5, 5, 5, 5, 5, 5], // Baseline
-                    color: (opacity = 1) => `rgba(158, 158, 158, ${opacity})`,
-                    strokeWidth: 1,
-                    withDots: false,
-                  },
-                ],
-              }}
-              width={screenWidth - spacing.xl - spacing.xl} // dynamic width
-              height={220}
-              segments={5}
-              fromZero={false}
-              chartConfig={{
-                backgroundColor: Palette.card,
-                backgroundGradientFrom: Palette.card,
-                backgroundGradientTo: Palette.card,
-                decimalPlaces: 1,
-                color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                labelColor: (opacity = 1) => `rgba(0,0,0,${opacity})`,
-                style: {
-                  borderRadius: borderRadius.lg,
-                },
-                propsForDots: {
-                  r: '5',
-                  strokeWidth: '2',
-                  stroke: '#fff',
-                },
-                propsForBackgroundLines: {
-                  stroke: Palette.border,
-                  strokeWidth: 1,
-                },
-                propsForLabels: {
-                  fontSize: 12,
-                },
-              }}
-              bezier
-              style={{ marginVertical: spacing.xs, borderRadius: borderRadius.lg }}
-              decorator={() => (
-                <View style={styles.chartLegend}>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendColor, { backgroundColor: '#64B5F6' }]} />
-                    <Text style={styles.legendText}>Your Mood</Text>
-                  </View>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendColor, { backgroundColor: '#9E9E9E' }]} />
-                    <Text style={styles.legendText}>Baseline</Text>
-                  </View>
-                </View>
-              )}
-            />
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Mood Over Time</Text>
+            <View style={styles.moodIndicator}>
+              <MaterialCommunityIcons
+                name={getMoodEmoji(currentData.moodAverage)}
+                size={20}
+                color={getMoodColor(currentData.moodAverage)}
+              />
+              <Text style={[styles.moodIndicatorText, { color: getMoodColor(currentData.moodAverage) }]}>
+                {currentData.moodAverage >= 7
+                  ? 'Great'
+                  : currentData.moodAverage >= 5
+                  ? 'Good'
+                  : 'Needs Attention'}
+              </Text>
+            </View>
           </View>
 
-          {/* Mood Range Indicator */}
-          <View style={styles.moodRangeContainer}>
-            <Text style={styles.moodRangeText}>Low</Text>
-            <View style={styles.moodRangeBar}>
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
-                <View
-                  key={num}
-                  style={[
-                    styles.moodRangeSegment,
+          {currentData.entriesCount > 0 ? (
+            <View style={styles.chartContainer}>
+              <LineChart
+                data={{
+                  labels: labels,
+                  datasets: [
                     {
-                      backgroundColor: getMoodColor(num),
-                      opacity: num <= currentData.moodAverage ? 1 : 0.2,
+                      data: currentData.moodData.map((v) => Math.max(v, 0.1)),
+                      color: (opacity = 1) => `rgba(100, 181, 246, ${opacity})`,
+                      strokeWidth: 3,
                     },
-                  ]}
-                />
-              ))}
+                    {
+                      data: Array(labels.length).fill(5),
+                      color: (opacity = 1) => `rgba(158, 158, 158, ${opacity * 0.5})`,
+                      strokeWidth: 1,
+                      withDots: false,
+                    },
+                  ],
+                }}
+                width={screenWidth - spacing.lg * 2 - spacing.lg * 2}
+                height={180}
+                yAxisSuffix=""
+                yAxisInterval={1}
+                fromZero
+                segments={5}
+                chartConfig={{
+                  backgroundColor: Palette.card,
+                  backgroundGradientFrom: Palette.card,
+                  backgroundGradientTo: Palette.card,
+                  decimalPlaces: 1,
+                  color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                  labelColor: (opacity = 1) => `rgba(100, 100, 100, ${opacity})`,
+                  style: {
+                    borderRadius: borderRadius.md,
+                  },
+                  propsForDots: {
+                    r: '4',
+                    strokeWidth: '2',
+                    stroke: '#64B5F6',
+                  },
+                  propsForBackgroundLines: {
+                    stroke: Palette.border,
+                    strokeWidth: 1,
+                  },
+                }}
+                bezier
+                style={styles.chart}
+              />
+              <View style={styles.chartLegend}>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: '#64B5F6' }]} />
+                  <Text style={styles.legendText}>Your Mood</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: '#9E9E9E' }]} />
+                  <Text style={styles.legendText}>Baseline (5)</Text>
+                </View>
+              </View>
             </View>
-            <Text style={styles.moodRangeText}>High</Text>
-          </View>
+          ) : (
+            <View style={styles.noDataContainer}>
+              <MaterialCommunityIcons name="chart-line" size={48} color={Palette.textLight} />
+              <Text style={styles.noDataText}>No mood data yet</Text>
+              <Text style={styles.noDataSubtext}>
+                Start logging your mood to see trends
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Activity Breakdown */}
@@ -562,25 +710,29 @@ export default function ProgressScreen() {
             icon="notebook-edit-outline"
             label="Journal Entries"
             value={currentData.journalEntries}
-            color={Palette.secondaryPurple} // e.g. "#7986CB"
+            color="#5C6BC0"
+            target={selectedPeriod === 'week' ? 7 : 20}
           />
           <ActivityItem
             icon="weather-windy"
             label="Breathing Sessions"
             value={currentData.breathingSessions}
-            color={Palette.primary} // e.g. "#4DB6AC"
+            color="#26A69A"
+            target={selectedPeriod === 'week' ? 7 : 20}
           />
           <ActivityItem
             icon="earth"
             label="Grounding Sessions"
             value={currentData.groundingSessions}
-            color={Palette.secondaryBlue} // e.g. "#64B5F6"
+            color="#64B5F6"
+            target={selectedPeriod === 'week' ? 5 : 15}
           />
           <ActivityItem
             icon="brain"
             label="CBT Exercises"
             value={currentData.cbtSessions}
-            color={Palette.secondaryPink} // e.g. "#BA68C8"
+            color="#AB47BC"
+            target={selectedPeriod === 'week' ? 3 : 10}
           />
         </View>
 
@@ -588,15 +740,23 @@ export default function ProgressScreen() {
         <View style={[styles.card, shadows.medium]}>
           <Text style={styles.cardTitle}>Your Insights</Text>
           {currentData.insights.map((insight, index) => (
-            <InsightCard key={index} {...insight} />
+            <InsightCard key={`insight-${index}`} {...insight} />
           ))}
+        </View>
+
+        {/* Encouragement Card */}
+        <View style={[styles.encouragementCard, shadows.low]}>
+          <MaterialCommunityIcons name="heart" size={24} color="#E57373" />
+          <Text style={styles.encouragementText}>
+            Remember: Progress isn't always linear. Every step forward, no matter how small,
+            is a victory worth celebrating. 💙
+          </Text>
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// Updated styles using theme constants
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -604,7 +764,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: spacing.lg,
-    paddingBottom: spacing.xl,
+    paddingBottom: spacing.xl * 2,
   },
   loadingContainer: {
     flex: 1,
@@ -614,6 +774,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: spacing.md,
     color: Palette.textLight,
+    fontSize: typography.body.fontSize,
   },
   header: {
     marginBottom: spacing.lg,
@@ -621,132 +782,160 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  refreshButton: {
-    padding: spacing.xs,
+    alignItems: 'flex-start',
   },
   title: {
-    ...typography.h1,
+    fontSize: typography.h1.fontSize,
+    fontWeight: typography.h1.fontWeight,
     color: Palette.textDark,
-    marginBottom: spacing.xs,
   },
   subtitle: {
-    ...typography.body,
+    fontSize: typography.caption.fontSize,
     color: Palette.textLight,
-    textAlign: 'center',
-    lineHeight: typography.body.lineHeight,
+    marginTop: spacing.xs,
+  },
+  offlineBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+  },
+  offlineText: {
+    fontSize: typography.small.fontSize,
+    color: '#F57C00',
+    marginLeft: spacing.xs,
   },
   periodSelector: {
     flexDirection: 'row',
-    backgroundColor: Palette.border,
+    backgroundColor: Palette.card,
     borderRadius: borderRadius.full,
     padding: spacing.xs,
     marginBottom: spacing.lg,
+    ...shadows.low,
   },
   periodButton: {
     flex: 1,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
+    alignItems: 'center',
   },
   activePeriodButton: {
-    backgroundColor: Palette.white,
-    // Example of shallow shadow for contrast:
-    ...shadows.low,
+    backgroundColor: Palette.secondaryBlue,
   },
   periodText: {
-    ...typography.body,
+    fontSize: typography.body.fontSize,
     color: Palette.textLight,
-    textAlign: 'center',
-    fontWeight: '600',
+    fontWeight: '500',
   },
   activePeriodText: {
-    color: Palette.secondaryBlue,
+    color: Palette.white,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  statCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Palette.card,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginHorizontal: spacing.xs,
+    ...shadows.low,
+  },
+  statIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.sm,
+  },
+  statTextContainer: {
+    flex: 1,
+  },
+  statValue: {
+    fontSize: typography.h2.fontSize,
+    fontWeight: typography.h2.fontWeight,
+    color: Palette.textDark,
+  },
+  statTitle: {
+    fontSize: typography.small.fontSize,
+    color: Palette.textLight,
+  },
+  statSubtitle: {
+    fontSize: 10,
+    color: Palette.textLight,
   },
   card: {
     backgroundColor: Palette.card,
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
-    marginBottom: spacing.lg,
-    borderWidth: 0, // or add a borderColor: Palette.border
+    marginBottom: spacing.md,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
   },
   cardTitle: {
-    ...typography.h2,
+    fontSize: typography.h3.fontSize,
+    fontWeight: typography.h3.fontWeight,
     color: Palette.textDark,
-    marginBottom: spacing.md,
+  },
+  moodIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  moodIndicatorText: {
+    fontSize: typography.caption.fontSize,
+    fontWeight: '500',
+    marginLeft: spacing.xs,
   },
   chartContainer: {
     alignItems: 'center',
   },
+  chart: {
+    borderRadius: borderRadius.md,
+  },
   chartLegend: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: spacing.sm,
+    marginTop: spacing.md,
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: spacing.md,
   },
-  legendColor: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     marginRight: spacing.xs,
   },
   legendText: {
-    ...typography.small,
+    fontSize: typography.small.fontSize,
     color: Palette.textLight,
   },
-  moodRangeContainer: {
-    flexDirection: 'row',
+  noDataContainer: {
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xl,
   },
-  moodRangeText: {
-    ...typography.small,
-    color: Palette.textLight,
-  },
-  moodRangeBar: {
-    flex: 1,
-    height: 10,
-    flexDirection: 'row',
-    marginHorizontal: spacing.sm,
-    borderRadius: borderRadius.sm,
-    overflow: 'hidden',
-  },
-  moodRangeSegment: {
-    flex: 1,
-    height: '100%',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  statCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '48%',
-    marginBottom: spacing.sm,
-  },
-  statIconContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing.sm,
-  },
-  statValue: {
-    ...typography.h2,
+  noDataText: {
+    fontSize: typography.body.fontSize,
     color: Palette.textDark,
+    marginTop: spacing.md,
   },
-  statTitle: {
-    ...typography.small,
+  noDataSubtext: {
+    fontSize: typography.caption.fontSize,
     color: Palette.textLight,
-    marginTop: spacing.xs / 2,
+    marginTop: spacing.xs,
   },
   activityItem: {
     flexDirection: 'row',
@@ -758,48 +947,64 @@ const styles = StyleSheet.create({
   activityIconContainer: {
     width: 40,
     height: 40,
-    borderRadius: borderRadius.full,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.md,
   },
-  activityLabel: {
+  activityTextContainer: {
     flex: 1,
-    ...typography.body,
-    color: Palette.textMedium,
+  },
+  activityLabel: {
+    fontSize: typography.body.fontSize,
+    color: Palette.textDark,
+  },
+  activityTarget: {
+    fontSize: typography.small.fontSize,
+    color: Palette.textLight,
+    marginTop: 2,
   },
   activityValue: {
-    ...typography.body,
-    fontWeight: 'bold',
-    color: Palette.textDark,
+    fontSize: typography.h3.fontSize,
+    fontWeight: typography.h3.fontWeight,
   },
   insightCard: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
     backgroundColor: Palette.background,
     borderRadius: borderRadius.md,
     padding: spacing.md,
     marginBottom: spacing.sm,
+    borderLeftWidth: 4,
   },
   insightIcon: {
     marginRight: spacing.sm,
-    marginTop: 2,
   },
   insightContent: {
     flex: 1,
   },
   insightTitle: {
-    ...typography.body,
-    fontWeight: 'bold',
+    fontSize: typography.body.fontSize,
+    fontWeight: '600',
     marginBottom: spacing.xs,
   },
   insightDescription: {
-    ...typography.small,
-    color: Palette.textMedium,
+    fontSize: typography.caption.fontSize,
+    color: Palette.textLight,
     lineHeight: 20,
   },
-  loadingSpinner: {
+  encouragementCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FCE4EC',
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
     marginTop: spacing.md,
   },
+  encouragementText: {
+    flex: 1,
+    marginLeft: spacing.sm,
+    fontSize: typography.caption.fontSize,
+    color: '#C2185B',
+    lineHeight: 20,
+  },
 });
-
