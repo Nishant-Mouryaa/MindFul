@@ -38,6 +38,7 @@ import { passwordUtils } from '../../utils/passwordUtils';
 import { validation } from '../../utils/validation';
 import { syncQueue } from '../../utils/syncQueue';
 import { notificationUtils } from '../../utils/notifications';
+import { Platform } from 'react-native';
 
 // Import components
 import ErrorBoundary from '../../components/ErrorBoundary';
@@ -59,6 +60,9 @@ const IS_SMALL_DEVICE = SCREEN_WIDTH < 375;
 // Security constants
 const AUTO_LOCK_TIMEOUT = 5 * 60 * 1000;
 const BACKGROUND_LOCK_TIMEOUT = 30 * 1000;
+
+const BOTTOM_NAV_HEIGHT = Platform.OS === 'ios' ? 90 : 70;
+const EXTRA_PADDING = 20;
 
 function JournalScreenContent() {
   // -------------------------------------------------------------------------
@@ -1213,7 +1217,7 @@ const styles = StyleSheet.create({
   // List Content
   listContent: {
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.xl,
+    paddingBottom: BOTTOM_NAV_HEIGHT + EXTRA_PADDING,
   },
 
   // Empty State
