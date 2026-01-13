@@ -1,25 +1,28 @@
-// components/Journal/SearchBar.js
+// components/Journal/SearchBar.js - Compact Mobile-Optimized Version
 import React, { useState, useCallback } from 'react';
 import {
   View,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Animated,
+  Dimensions,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { debounce } from 'lodash';
 import { Palette, spacing, typography, borderRadius, shadows } from '../../theme/colors';
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const IS_SMALL_DEVICE = SCREEN_WIDTH < 375;
+
 export default function SearchBar({ 
   onSearch, 
   placeholder = "Search entries...",
-  autoFocus = false 
+  autoFocus = false,
+  compact = false,
 }) {
   const [searchText, setSearchText] = useState('');
   const [isFocused, setIsFocused] = useState(false);
 
-  // Debounce search to avoid too many updates
   const debouncedSearch = useCallback(
     debounce((text) => {
       onSearch(text);
@@ -40,17 +43,18 @@ export default function SearchBar({
   return (
     <View style={[
       styles.container,
+      compact && styles.containerCompact,
       isFocused && styles.containerFocused
     ]}>
       <MaterialCommunityIcons 
         name="magnify" 
-        size={20} 
+        size={compact ? 18 : 20} 
         color={isFocused ? Palette.primary : Palette.textLight} 
       />
       
       <TextInput
-        style={styles.input}
-        placeholder={placeholder}
+        style={[styles.input, compact && styles.inputCompact]}
+        placeholder={IS_SMALL_DEVICE ? "Search..." : placeholder}
         placeholderTextColor={Palette.textLight}
         value={searchText}
         onChangeText={handleTextChange}
@@ -63,10 +67,14 @@ export default function SearchBar({
       />
 
       {searchText.length > 0 && (
-        <TouchableOpacity onPress={clearSearch} style={styles.clearButton}>
+        <TouchableOpacity 
+          onPress={clearSearch} 
+          style={styles.clearButton}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <MaterialCommunityIcons 
             name="close-circle" 
-            size={18} 
+            size={16} 
             color={Palette.textLight} 
           />
         </TouchableOpacity>
@@ -83,23 +91,30 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     borderWidth: 1,
-    borderColor: 'transparent',
-    ...shadows.low,
+    borderColor: Palette.border,
+  },
+  containerCompact: {
+    paddingVertical: 8,
+    paddingHorizontal: spacing.sm,
   },
   containerFocused: {
     borderColor: Palette.primary,
+    backgroundColor: Palette.white,
   },
   input: {
     flex: 1,
     marginLeft: spacing.sm,
     fontSize: typography.body.fontSize,
     color: Palette.textDark,
-    paddingVertical: spacing.xs,
+    paddingVertical: 2,
+  },
+  inputCompact: {
+    fontSize: typography.caption.fontSize,
+    marginLeft: spacing.xs,
   },
   clearButton: {
-    padding: spacing.xs,
+    padding: 4,
   },
 });

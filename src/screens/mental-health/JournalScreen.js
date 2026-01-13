@@ -1,4 +1,4 @@
-// screens/JournalScreen.js
+// screens/JournalScreen.js - Updated renderHeader function and styles
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
@@ -10,6 +10,7 @@ import {
   Animated,
   AppState,
   FlatList,
+  Dimensions,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getAuth } from 'firebase/auth';
@@ -33,10 +34,7 @@ import { Palette, spacing, typography, shadows, borderRadius } from '../../theme
 
 // Import utilities
 import { encryptionUtils } from '../../utils/encryption';
-console.log('encryptionUtils:', encryptionUtils);
-console.log('decryptEntry function:', encryptionUtils?.decryptEntry);
 import { passwordUtils } from '../../utils/passwordUtils';
-
 import { validation } from '../../utils/validation';
 import { syncQueue } from '../../utils/syncQueue';
 import { notificationUtils } from '../../utils/notifications';
@@ -55,9 +53,12 @@ import CrisisSupport from '../../components/Journal/CrisisSupport';
 import ReminderSettings from '../../components/Journal/ReminderSettings';
 import BackupSettings from '../../components/Journal/BackupSettings';
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const IS_SMALL_DEVICE = SCREEN_WIDTH < 375;
+
 // Security constants
-const AUTO_LOCK_TIMEOUT = 5 * 60 * 1000; // 5 minutes
-const BACKGROUND_LOCK_TIMEOUT = 30 * 1000; // 30 seconds
+const AUTO_LOCK_TIMEOUT = 5 * 60 * 1000;
+const BACKGROUND_LOCK_TIMEOUT = 30 * 1000;
 
 function JournalScreenContent() {
   // -------------------------------------------------------------------------
@@ -81,6 +82,8 @@ function JournalScreenContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+
+
   // New feature states
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMood, setFilterMood] = useState(null);
@@ -96,8 +99,12 @@ function JournalScreenContent() {
   const [appState, setAppState] = useState(AppState.currentState);
   
   // Refs
+  // New state for collapsible actions menu
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+  
   const activityTimeoutRef = useRef(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const menuAnimation = useRef(new Animated.Value(0)).current;
 
   // -------------------------------------------------------------------------
   // Filtered and Sorted Entries
@@ -304,6 +311,19 @@ function JournalScreenContent() {
   const trackActivity = useCallback(() => {
     setLastActivityTime(Date.now());
   }, []);
+
+
+   // Toggle actions menu with animation
+  const toggleActionsMenu = () => {
+    const toValue = showActionsMenu ? 0 : 1;
+    setShowActionsMenu(!showActionsMenu);
+    Animated.spring(menuAnimation, {
+      toValue,
+      useNativeDriver: true,
+      tension: 50,
+      friction: 7,
+    }).start();
+  };
 
   // -------------------------------------------------------------------------
   // Security Functions
@@ -697,53 +717,161 @@ function JournalScreenContent() {
     );
   };
 
+ // Updated renderHeader with mobile-optimized layout
   const renderHeader = () => (
     <View style={styles.headerContainer}>
-      {/* Title Row */}
+      {/* Compact Title Row */}
       <View style={styles.headerTop}>
-        <View>
+        <View style={styles.titleContainer}>
           <Text style={styles.title}>My Journal</Text>
-          <Text style={styles.subtitle}>
-            A space for your thoughts and reflections
-          </Text>
+          {!IS_SMALL_DEVICE && (
+            <Text style={styles.subtitle}>Your thoughts & reflections</Text>
+          )}
         </View>
-        <TouchableOpacity
-          style={styles.newEntryButton}
-          onPress={() => {
-            trackActivity();
-            setShowNewEntry(true);
-          }}
-          disabled={journalLocked}
+        
+        <View style={styles.headerActions}>
+          {/* Status Indicators */}
+          <View style={styles.statusIndicators}>
+            {!isOnline && (
+              <View style={styles.statusBadge}>
+                <MaterialCommunityIcons
+                  name="cloud-off-outline"
+                  size={14}
+                  color={Palette.secondaryOrange}
+                />
+              </View>
+            )}
+            {pendingSyncCount > 0 && (
+              <View style={[styles.statusBadge, styles.syncBadge]}>
+                <Text style={styles.syncBadgeText}>{pendingSyncCount}</Text>
+              </View>
+            )}
+          </View>
+          
+          {/* More Actions Button */}
+          <TouchableOpacity
+            style={styles.moreButton}
+            onPress={toggleActionsMenu}
+          >
+            <MaterialCommunityIcons
+              name={showActionsMenu ? 'close' : 'dots-vertical'}
+              size={22}
+              color={Palette.textDark}
+            />
+          </TouchableOpacity>
+          
+          {/* New Entry FAB */}
+          <TouchableOpacity
+            style={styles.newEntryButton}
+            onPress={() => {
+              trackActivity();
+              setShowNewEntry(true);
+            }}
+            disabled={journalLocked}
+          >
+            <MaterialCommunityIcons name="plus" size={22} color={Palette.white} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Collapsible Actions Menu */}
+      {showActionsMenu && (
+        <Animated.View
+          style={[
+            styles.actionsMenu,
+            {
+              opacity: menuAnimation,
+              transform: [
+                {
+                  translateY: menuAnimation.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-10, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
         >
-          <MaterialCommunityIcons name="plus" size={24} color={Palette.white} />
-        </TouchableOpacity>
-      </View>
+          <View style={styles.actionsGrid}>
+            <TouchableOpacity
+              style={styles.actionItem}
+              onPress={() => {
+                setShowActionsMenu(false);
+                if (!hasPassword) {
+                  setPasswordModalType('SET_PASSWORD');
+                } else {
+                  setPasswordModalType('CHANGE_PASSWORD');
+                }
+                setPasswordModalVisible(true);
+              }}
+            >
+              <View style={[styles.actionIcon, { backgroundColor: Palette.secondaryPurple + '20' }]}>
+                <MaterialCommunityIcons
+                  name={hasPassword ? 'lock-reset' : 'lock-open'}
+                  size={20}
+                  color={Palette.secondaryPurple}
+                />
+              </View>
+              <Text style={styles.actionLabel}>
+                {hasPassword ? 'Security' : 'Set Lock'}
+              </Text>
+            </TouchableOpacity>
 
-      {/* Status Bar */}
-      <View style={styles.statusBar}>
-        {!isOnline && (
-          <View style={styles.offlineIndicator}>
-            <MaterialCommunityIcons
-              name="cloud-off-outline"
-              size={16}
-              color={Palette.secondaryOrange}
-            />
-            <Text style={styles.offlineText}>Offline</Text>
-          </View>
-        )}
-        {pendingSyncCount > 0 && (
-          <View style={styles.syncIndicator}>
-            <MaterialCommunityIcons
-              name="sync"
-              size={16}
-              color={Palette.secondaryBlue}
-            />
-            <Text style={styles.syncText}>{pendingSyncCount} pending</Text>
-          </View>
-        )}
-      </View>
+            <TouchableOpacity
+              style={styles.actionItem}
+              onPress={() => {
+                setShowActionsMenu(false);
+                setShowReminderSettings(true);
+              }}
+            >
+              <View style={[styles.actionIcon, { backgroundColor: Palette.secondaryBlue + '20' }]}>
+                <MaterialCommunityIcons
+                  name="bell-outline"
+                  size={20}
+                  color={Palette.secondaryBlue}
+                />
+              </View>
+              <Text style={styles.actionLabel}>Reminders</Text>
+            </TouchableOpacity>
 
-      {/* Tab Selector */}
+            <TouchableOpacity
+              style={styles.actionItem}
+              onPress={() => {
+                setShowActionsMenu(false);
+                setShowBackupSettings(true);
+              }}
+            >
+              <View style={[styles.actionIcon, { backgroundColor: Palette.primary + '20' }]}>
+                <MaterialCommunityIcons
+                  name="cloud-sync"
+                  size={20}
+                  color={Palette.primary}
+                />
+              </View>
+              <Text style={styles.actionLabel}>Backup</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionItem}
+              onPress={() => {
+                setShowActionsMenu(false);
+                setShowCrisisSupport(true);
+              }}
+            >
+              <View style={[styles.actionIcon, { backgroundColor: Palette.secondaryRed + '20' }]}>
+                <MaterialCommunityIcons
+                  name="heart-outline"
+                  size={20}
+                  color={Palette.secondaryRed}
+                />
+              </View>
+              <Text style={styles.actionLabel}>Get Help</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      )}
+
+      {/* Compact Tab Selector */}
       <View style={styles.tabContainer}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'entries' && styles.tabActive]}
@@ -751,7 +879,7 @@ function JournalScreenContent() {
         >
           <MaterialCommunityIcons
             name="notebook-outline"
-            size={20}
+            size={18}
             color={activeTab === 'entries' ? Palette.primary : Palette.textLight}
           />
           <Text
@@ -769,7 +897,7 @@ function JournalScreenContent() {
         >
           <MaterialCommunityIcons
             name="chart-line"
-            size={20}
+            size={18}
             color={activeTab === 'insights' ? Palette.primary : Palette.textLight}
           />
           <Text
@@ -783,82 +911,26 @@ function JournalScreenContent() {
         </TouchableOpacity>
       </View>
 
-      {/* Quick Actions */}
-      <View style={styles.quickActions}>
-        {!hasPassword ? (
-          <TouchableOpacity
-            style={styles.quickActionButton}
-            onPress={() => {
-              setPasswordModalType('SET_PASSWORD');
-              setPasswordModalVisible(true);
-            }}
-          >
-            <MaterialCommunityIcons
-              name="lock-open"
-              size={18}
-              color={Palette.white}
-            />
-            <Text style={styles.quickActionText}>Set Password</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={styles.quickActionButton}
-            onPress={() => {
-              setPasswordModalType('CHANGE_PASSWORD');
-              setPasswordModalVisible(true);
-            }}
-          >
-            <MaterialCommunityIcons
-              name="lock-reset"
-              size={18}
-              color={Palette.white}
-            />
-            <Text style={styles.quickActionText}>Security</Text>
-          </TouchableOpacity>
-        )}
-
-        <TouchableOpacity
-          style={styles.quickActionButton}
-          onPress={() => setShowReminderSettings(true)}
-        >
-          <MaterialCommunityIcons name="bell-outline" size={18} color={Palette.white} />
-          <Text style={styles.quickActionText}>Reminders</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-  style={[styles.quickActionButton, { backgroundColor: Palette.secondaryBlue }]}
-  onPress={() => setShowBackupSettings(true)}
->
-  <MaterialCommunityIcons name="cloud-sync" size={18} color={Palette.white} />
-  <Text style={styles.quickActionText}>Backup</Text>
-</TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.quickActionButton, styles.crisisButton]}
-          onPress={() => setShowCrisisSupport(true)}
-        >
-          <MaterialCommunityIcons name="heart-outline" size={18} color={Palette.white} />
-          <Text style={styles.quickActionText}>Get Help</Text>
-        </TouchableOpacity>
-      </View>
-
       {/* Search & Filter (only for entries tab) */}
       {activeTab === 'entries' && (
-        <>
+        <View style={styles.searchFilterContainer}>
           <SearchBar
             onSearch={setSearchQuery}
-            placeholder="Search your entries..."
+            placeholder="Search entries..."
+            compact={true}
           />
           <FilterBar
             selectedMood={filterMood}
             onMoodChange={setFilterMood}
             selectedDateRange={filterDateRange}
             onDateRangeChange={setFilterDateRange}
+            compact={true}
           />
-        </>
+        </View>
       )}
     </View>
   );
+
 
   const renderEmptyList = () => (
     <View style={styles.emptyContainer}>
@@ -1001,73 +1073,116 @@ const styles = StyleSheet.create({
     backgroundColor: Palette.background,
   },
   headerContainer: {
-    paddingTop: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  titleContainer: {
+    flex: 1,
   },
   title: {
-    fontSize: typography.h1.fontSize,
+    fontSize: IS_SMALL_DEVICE ? typography.h2.fontSize : typography.h1.fontSize,
     fontWeight: typography.h1.fontWeight,
     color: Palette.textDark,
   },
   subtitle: {
-    fontSize: typography.caption.fontSize,
+    fontSize: typography.small.fontSize,
     color: Palette.textLight,
-    marginTop: spacing.xs,
+    marginTop: 2,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  statusIndicators: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: spacing.xs,
+  },
+  statusBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: Palette.secondaryOrange + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
+  },
+  syncBadge: {
+    backgroundColor: Palette.secondaryBlue + '20',
+  },
+  syncBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Palette.secondaryBlue,
+  },
+  moreButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Palette.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.low,
   },
   newEntryButton: {
     backgroundColor: Palette.primary,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     ...shadows.medium,
   },
-  statusBar: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.lg,
+  
+  // Actions Menu Styles
+  actionsMenu: {
+    marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
+    backgroundColor: Palette.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    ...shadows.medium,
   },
-  offlineIndicator: {
+  actionsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  actionItem: {
+    width: '23%',
     alignItems: 'center',
-    backgroundColor: Palette.secondaryOrange + '20',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
-    marginRight: spacing.sm,
+    paddingVertical: spacing.sm,
   },
-  offlineText: {
-    fontSize: typography.small.fontSize,
-    color: Palette.secondaryOrange,
-    marginLeft: spacing.xs,
-  },
-  syncIndicator: {
-    flexDirection: 'row',
+  actionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
-    backgroundColor: Palette.secondaryBlue + '20',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
   },
-  syncText: {
+  actionLabel: {
     fontSize: typography.small.fontSize,
-    color: Palette.secondaryBlue,
-    marginLeft: spacing.xs,
+    color: Palette.textDark,
+    textAlign: 'center',
   },
+
+  // Tab Styles
   tabContainer: {
     flexDirection: 'row',
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
     backgroundColor: Palette.card,
     borderRadius: borderRadius.md,
-    padding: spacing.xs,
+    padding: 4,
   },
   tab: {
     flex: 1,
@@ -1076,54 +1191,41 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.sm,
+    gap: spacing.xs,
   },
   tabActive: {
     backgroundColor: Palette.primary + '15',
   },
   tabText: {
-    fontSize: typography.body.fontSize,
+    fontSize: typography.caption.fontSize,
     color: Palette.textLight,
-    marginLeft: spacing.xs,
   },
   tabTextActive: {
     color: Palette.primary,
     fontWeight: '600',
   },
-  quickActions: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  quickActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Palette.secondaryPurple,
+
+  // Search & Filter Container
+  searchFilterContainer: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    marginRight: spacing.sm,
   },
-  quickActionText: {
-    color: Palette.white,
-    fontSize: typography.caption.fontSize,
-    fontWeight: '500',
-    marginLeft: spacing.xs,
-  },
-  crisisButton: {
-    backgroundColor: Palette.secondaryRed,
-  },
+
+  // List Content
   listContent: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingBottom: spacing.xl,
   },
+
+  // Empty State
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacing.xl * 2,
+    paddingHorizontal: spacing.lg,
   },
   emptyTitle: {
-    fontSize: typography.h2.fontSize,
-    fontWeight: typography.h2.fontWeight,
+    fontSize: typography.h3.fontSize,
+    fontWeight: typography.h3.fontWeight,
     color: Palette.textDark,
     marginTop: spacing.md,
   },
@@ -1132,7 +1234,6 @@ const styles = StyleSheet.create({
     color: Palette.textLight,
     textAlign: 'center',
     marginTop: spacing.sm,
-    paddingHorizontal: spacing.xl,
   },
   emptyButton: {
     backgroundColor: Palette.primary,

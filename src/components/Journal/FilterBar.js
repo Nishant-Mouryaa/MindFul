@@ -1,4 +1,4 @@
-// components/Journal/FilterBar.js
+// components/Journal/FilterBar.js - Compact Mobile-Optimized Version
 import React, { useState } from 'react';
 import {
   View,
@@ -8,9 +8,13 @@ import {
   Modal,
   StyleSheet,
   SafeAreaView,
+  Dimensions,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Palette, spacing, typography, borderRadius, shadows } from '../../theme/colors';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const IS_SMALL_DEVICE = SCREEN_WIDTH < 375;
 
 const MOOD_OPTIONS = [
   { label: 'All', value: null, icon: 'emoticon-outline', color: Palette.textLight },
@@ -25,11 +29,11 @@ const MOOD_OPTIONS = [
 ];
 
 const DATE_RANGE_OPTIONS = [
-  { label: 'All Time', value: null },
-  { label: 'Today', value: 'today' },
-  { label: 'This Week', value: 'week' },
-  { label: 'This Month', value: 'month' },
-  { label: 'Last 3 Months', value: '3months' },
+  { label: 'All', value: null, short: 'All' },
+  { label: 'Today', value: 'today', short: 'Today' },
+  { label: 'This Week', value: 'week', short: 'Week' },
+  { label: 'This Month', value: 'month', short: 'Month' },
+  { label: 'Last 3 Months', value: '3months', short: '3 Mo' },
 ];
 
 export default function FilterBar({
@@ -37,19 +41,19 @@ export default function FilterBar({
   onMoodChange,
   selectedDateRange,
   onDateRangeChange,
+  compact = false,
 }) {
   const [showMoodModal, setShowMoodModal] = useState(false);
   const [showDateModal, setShowDateModal] = useState(false);
 
-  const getActiveFiltersCount = () => {
-    let count = 0;
-    if (selectedMood) count++;
-    if (selectedDateRange) count++;
-    return count;
-  };
-
+  const hasActiveFilters = selectedMood || selectedDateRange;
   const selectedMoodOption = MOOD_OPTIONS.find(m => m.value === selectedMood);
   const selectedDateOption = DATE_RANGE_OPTIONS.find(d => d.value === selectedDateRange);
+
+  const clearAllFilters = () => {
+    onMoodChange(null);
+    onDateRangeChange(null);
+  };
 
   return (
     <View style={styles.container}>
@@ -58,73 +62,76 @@ export default function FilterBar({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Mood Filter */}
+        {/* Filter Icon/Label */}
+        <View style={styles.filterLabel}>
+          <MaterialCommunityIcons
+            name="filter-variant"
+            size={16}
+            color={hasActiveFilters ? Palette.primary : Palette.textLight}
+          />
+        </View>
+
+        {/* Mood Filter Chip */}
         <TouchableOpacity
           style={[
             styles.filterChip,
             selectedMood && styles.filterChipActive
           ]}
           onPress={() => setShowMoodModal(true)}
+          activeOpacity={0.7}
         >
           <MaterialCommunityIcons
             name={selectedMoodOption?.icon || 'emoticon-outline'}
-            size={18}
-            color={selectedMood ? Palette.white : Palette.textDark}
-          />
-          <Text style={[
-            styles.filterChipText,
-            selectedMood && styles.filterChipTextActive
-          ]}>
-            {selectedMoodOption?.label || 'Mood'}
-          </Text>
-          <MaterialCommunityIcons
-            name="chevron-down"
             size={16}
-            color={selectedMood ? Palette.white : Palette.textLight}
+            color={selectedMood ? Palette.white : selectedMoodOption?.color || Palette.textLight}
           />
+          {!IS_SMALL_DEVICE && (
+            <Text style={[
+              styles.filterChipText,
+              selectedMood && styles.filterChipTextActive
+            ]}>
+              {selectedMoodOption?.label || 'Mood'}
+            </Text>
+          )}
         </TouchableOpacity>
 
-        {/* Date Range Filter */}
+        {/* Date Range Filter Chip */}
         <TouchableOpacity
           style={[
             styles.filterChip,
             selectedDateRange && styles.filterChipActive
           ]}
           onPress={() => setShowDateModal(true)}
+          activeOpacity={0.7}
         >
           <MaterialCommunityIcons
             name="calendar-range"
-            size={18}
-            color={selectedDateRange ? Palette.white : Palette.textDark}
+            size={16}
+            color={selectedDateRange ? Palette.white : Palette.textLight}
           />
           <Text style={[
             styles.filterChipText,
             selectedDateRange && styles.filterChipTextActive
           ]}>
-            {selectedDateOption?.label || 'Date'}
+            {IS_SMALL_DEVICE 
+              ? (selectedDateOption?.short || 'Date')
+              : (selectedDateOption?.label || 'Date')
+            }
           </Text>
-          <MaterialCommunityIcons
-            name="chevron-down"
-            size={16}
-            color={selectedDateRange ? Palette.white : Palette.textLight}
-          />
         </TouchableOpacity>
 
-        {/* Clear Filters */}
-        {getActiveFiltersCount() > 0 && (
+        {/* Clear Filters Button */}
+        {hasActiveFilters && (
           <TouchableOpacity
             style={styles.clearButton}
-            onPress={() => {
-              onMoodChange(null);
-              onDateRangeChange(null);
-            }}
+            onPress={clearAllFilters}
+            activeOpacity={0.7}
           >
             <MaterialCommunityIcons
-              name="close"
+              name="close-circle"
               size={16}
               color={Palette.secondaryRed}
             />
-            <Text style={styles.clearButtonText}>Clear</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -138,42 +145,53 @@ export default function FilterBar({
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Filter by Mood</Text>
-            <TouchableOpacity onPress={() => setShowMoodModal(false)}>
+            <TouchableOpacity 
+              onPress={() => setShowMoodModal(false)}
+              style={styles.modalCloseButton}
+            >
               <MaterialCommunityIcons name="close" size={24} color={Palette.textLight} />
             </TouchableOpacity>
+            <Text style={styles.modalTitle}>Filter by Mood</Text>
+            <View style={styles.modalCloseButton} />
           </View>
           
-          <View style={styles.modalContent}>
+          <View style={styles.moodGrid}>
             {MOOD_OPTIONS.map((mood) => (
               <TouchableOpacity
                 key={mood.value || 'all'}
                 style={[
-                  styles.moodOption,
-                  selectedMood === mood.value && styles.moodOptionSelected
+                  styles.moodGridItem,
+                  selectedMood === mood.value && styles.moodGridItemSelected
                 ]}
                 onPress={() => {
                   onMoodChange(mood.value);
                   setShowMoodModal(false);
                 }}
               >
-                <MaterialCommunityIcons
-                  name={mood.icon}
-                  size={32}
-                  color={mood.color}
-                />
+                <View style={[
+                  styles.moodIconContainer,
+                  { backgroundColor: mood.color + '20' }
+                ]}>
+                  <MaterialCommunityIcons
+                    name={mood.icon}
+                    size={28}
+                    color={mood.color}
+                  />
+                </View>
                 <Text style={[
-                  styles.moodOptionText,
-                  selectedMood === mood.value && styles.moodOptionTextSelected
+                  styles.moodGridLabel,
+                  selectedMood === mood.value && styles.moodGridLabelSelected
                 ]}>
                   {mood.label}
                 </Text>
                 {selectedMood === mood.value && (
-                  <MaterialCommunityIcons
-                    name="check-circle"
-                    size={20}
-                    color={Palette.primary}
-                  />
+                  <View style={styles.selectedIndicator}>
+                    <MaterialCommunityIcons
+                      name="check-circle"
+                      size={16}
+                      color={Palette.primary}
+                    />
+                  </View>
                 )}
               </TouchableOpacity>
             ))}
@@ -190,13 +208,17 @@ export default function FilterBar({
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Filter by Date</Text>
-            <TouchableOpacity onPress={() => setShowDateModal(false)}>
+            <TouchableOpacity 
+              onPress={() => setShowDateModal(false)}
+              style={styles.modalCloseButton}
+            >
               <MaterialCommunityIcons name="close" size={24} color={Palette.textLight} />
             </TouchableOpacity>
+            <Text style={styles.modalTitle}>Filter by Date</Text>
+            <View style={styles.modalCloseButton} />
           </View>
           
-          <View style={styles.modalContent}>
+          <View style={styles.dateList}>
             {DATE_RANGE_OPTIONS.map((option) => (
               <TouchableOpacity
                 key={option.value || 'all'}
@@ -209,6 +231,11 @@ export default function FilterBar({
                   setShowDateModal(false);
                 }}
               >
+                <MaterialCommunityIcons
+                  name={option.value ? 'calendar-check' : 'calendar-blank'}
+                  size={22}
+                  color={selectedDateRange === option.value ? Palette.primary : Palette.textLight}
+                />
                 <Text style={[
                   styles.dateOptionText,
                   selectedDateRange === option.value && styles.dateOptionTextSelected
@@ -236,39 +263,43 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   scrollContent: {
-    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
+    paddingRight: spacing.sm,
+  },
+  filterLabel: {
+    marginRight: spacing.xs,
+    opacity: 0.7,
   },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Palette.card,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
     borderRadius: borderRadius.full,
-    marginRight: spacing.sm,
-    ...shadows.low,
+    marginRight: spacing.xs,
+    borderWidth: 1,
+    borderColor: Palette.border,
+    gap: 4,
   },
   filterChipActive: {
     backgroundColor: Palette.primary,
+    borderColor: Palette.primary,
   },
   filterChipText: {
-    fontSize: typography.caption.fontSize,
+    fontSize: typography.small.fontSize,
     color: Palette.textDark,
-    marginHorizontal: spacing.xs,
   },
   filterChipTextActive: {
     color: Palette.white,
+    fontWeight: '500',
   },
   clearButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-  },
-  clearButtonText: {
-    fontSize: typography.caption.fontSize,
-    color: Palette.secondaryRed,
+    padding: spacing.xs,
     marginLeft: spacing.xs,
   },
+  
+  // Modal Styles
   modalContainer: {
     flex: 1,
     backgroundColor: Palette.background,
@@ -277,51 +308,81 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.lg,
+    padding: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: Palette.border,
   },
+  modalCloseButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   modalTitle: {
-    fontSize: typography.h2.fontSize,
-    fontWeight: typography.h2.fontWeight,
+    fontSize: typography.h3.fontSize,
+    fontWeight: '600',
     color: Palette.textDark,
   },
-  modalContent: {
-    padding: spacing.lg,
-  },
-  moodOption: {
+  
+  // Mood Grid Styles
+  moodGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: spacing.md,
+    justifyContent: 'space-between',
+  },
+  moodGridItem: {
+    width: '30%',
     alignItems: 'center',
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
     borderRadius: borderRadius.md,
-    marginBottom: spacing.sm,
+    position: 'relative',
   },
-  moodOptionSelected: {
-    backgroundColor: Palette.primary + '15',
+  moodGridItemSelected: {
+    backgroundColor: Palette.primary + '10',
   },
-  moodOptionText: {
-    flex: 1,
-    fontSize: typography.body.fontSize,
+  moodIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  moodGridLabel: {
+    fontSize: typography.caption.fontSize,
     color: Palette.textDark,
-    marginLeft: spacing.md,
+    textAlign: 'center',
   },
-  moodOptionTextSelected: {
+  moodGridLabelSelected: {
     fontWeight: '600',
+    color: Palette.primary,
+  },
+  selectedIndicator: {
+    position: 'absolute',
+    top: spacing.xs,
+    right: spacing.xs,
+  },
+
+  // Date List Styles
+  dateList: {
+    padding: spacing.md,
   },
   dateOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.md,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
+    gap: spacing.md,
   },
   dateOptionSelected: {
-    backgroundColor: Palette.primary + '15',
+    backgroundColor: Palette.primary + '10',
   },
   dateOptionText: {
+    flex: 1,
     fontSize: typography.body.fontSize,
     color: Palette.textDark,
   },
