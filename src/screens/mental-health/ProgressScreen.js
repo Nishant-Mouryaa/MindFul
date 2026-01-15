@@ -272,70 +272,124 @@ export default function ProgressScreen() {
     }
   };
 
-  const calculateStreak = async () => {
-    try {
-      const auth = getAuth();
-      if (!auth.currentUser) return 0;
+// Replace the entire calculateStreak function in ProgressScreen.js with this:
 
-      const today = new Date();
-      const startDate = new Date(today);
-      startDate.setDate(today.getDate() - 365);
+const calculateStreak = async () => {
+  try {
+    const auth = getAuth();
+    if (!auth.currentUser) return 0;
 
-      // Check multiple collections for activity
-      const collections = ['activities', 'journals', 'moodEntries'];
-      const uniqueDates = new Set();
+    // Fetch all journal entries
+    const journalsQuery = query(
+      collection(db, 'journals'),
+      where('userId', '==', auth.currentUser.uid)
+    );
+    
+    const snapshot = await getDocs(journalsQuery);
+    
+    if (snapshot.empty) return 0;
 
-      for (const collectionName of collections) {
-        try {
-          const q = query(
-            collection(db, collectionName),
-            where('userId', '==', auth.currentUser.uid),
-            where(collectionName === 'activities' ? 'date' : 'date', '>=', startDate)
-          );
-
-          const snapshot = await getDocs(q);
-          snapshot.forEach((doc) => {
-            const data = doc.data();
-            const dateField = data.date || data.timestamp;
-            if (dateField) {
-              const date = dateField.toDate ? dateField.toDate() : new Date(dateField);
-              const dateString = date.toISOString().split('T')[0];
-              uniqueDates.add(dateString);
-            }
-          });
-        } catch (error) {
-          // Continue with other collections
-        }
-      }
-
-      const sortedDates = Array.from(uniqueDates).sort().reverse();
-      let streak = 0;
-      let currentDate = new Date();
-
-      const todayString = currentDate.toISOString().split('T')[0];
-      if (sortedDates.includes(todayString)) {
-        streak++;
-        currentDate.setDate(currentDate.getDate() - 1);
+    // Process journal entries and sort by date descending
+    const journalEntries = snapshot.docs.map(doc => {
+      const data = doc.data();
+      let dateValue;
+      
+      if (data.date && typeof data.date.toDate === 'function') {
+        dateValue = data.date.toDate();
+      } else if (data.date) {
+        dateValue = new Date(data.date);
       } else {
-        currentDate.setDate(currentDate.getDate() - 1);
+        dateValue = new Date();
       }
+      
+      return {
+        date: dateValue,
+        id: doc.id
+      };
+    });
 
-      for (let i = 0; i < 365; i++) {
-        const dateString = currentDate.toISOString().split('T')[0];
-        if (sortedDates.includes(dateString)) {
-          streak++;
-          currentDate.setDate(currentDate.getDate() - 1);
-        } else {
+    // Sort entries by date (newest first)
+    const sortedEntries = journalEntries.sort((a, b) => b.date - a.date);
+
+    let currentStreak = 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Check if there's an entry today
+    const hasEntryToday = sortedEntries.some(entry => {
+      const entryDate = new Date(entry.date);
+      entryDate.setHours(0, 0, 0, 0);
+      return entryDate.getTime() === today.getTime();
+    });
+
+    if (!hasEntryToday) {
+      // If no entry today, streak is 0 unless we want to allow streaks from yesterday
+      // For consistency with MoodAnalytics, we'll start from the most recent consecutive days
+      let expectedDate = new Date(today);
+      
+      for (let i = 0; i < Math.min(sortedEntries.length, 365); i++) {
+        const entryDate = new Date(sortedEntries[i].date);
+        entryDate.setHours(0, 0, 0, 0);
+        
+        expectedDate = new Date(today);
+        expectedDate.setDate(expectedDate.getDate() - i);
+        expectedDate.setHours(0, 0, 0, 0);
+        
+        if (entryDate.getTime() === expectedDate.getTime()) {
+          currentStreak++;
+        } else if (entryDate.getTime() < expectedDate.getTime()) {
+          // Gap found, streak ends
           break;
+        } else {
+          // Entry is in the future (shouldn't happen) or duplicate date
+          // Skip this entry by adjusting expected date
+          expectedDate.setDate(expectedDate.getDate() + 1);
+          i--; // Re-check with same entry for next day
         }
       }
-
-      return streak;
-    } catch (error) {
-      console.error('Error calculating streak:', error);
-      return 0;
+    } else {
+      // Count consecutive days including today
+      let expectedDate = new Date(today);
+      currentStreak = 1; // Today counts
+      
+      for (let i = 1; i < Math.min(sortedEntries.length, 365); i++) {
+        const entryDate = new Date(sortedEntries[i].date);
+        entryDate.setHours(0, 0, 0, 0);
+        
+        expectedDate = new Date(today);
+        expectedDate.setDate(expectedDate.getDate() - i);
+        expectedDate.setHours(0, 0, 0, 0);
+        
+        if (entryDate.getTime() === expectedDate.getTime()) {
+          currentStreak++;
+        } else if (entryDate.getTime() < expectedDate.getTime()) {
+          // Gap found, streak ends
+          break;
+        } else {
+          // Entry is in the future or duplicate date
+          // Skip this entry by adjusting expected date
+          expectedDate.setDate(expectedDate.getDate() + 1);
+          i--; // Re-check with same entry for next day
+        }
+      }
     }
-  };
+
+    return currentStreak;
+  } catch (error) {
+    console.error('Error calculating streak:', error);
+    // Fallback: Try to calculate from local data
+    try {
+      const localData = await AsyncStorage.getItem('progressData');
+      if (localData) {
+        const parsedData = JSON.parse(localData);
+        return parsedData.week?.streak || 0;
+      }
+    } catch (e) {
+      console.error('Error loading local streak:', e);
+    }
+    return 0;
+  }
+};
 
   const calculateCompletionRate = (activities, period) => {
     const targetDays = period === 'week' ? 7 : 30;
